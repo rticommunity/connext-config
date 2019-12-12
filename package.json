@@ -1,0 +1,19 @@
+{
+  "name": "rtipkg-config",
+  "version": "1.0.0",
+  "description": "Similar to pkg-config, return metainformation about compiler and linker flags for RTI Connext DDS target architectures",
+  "main": "rtipkg-config.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fabriziobertocci/rtipkg-config.git"
+  },
+  "author": "Fabrizio Bertocci",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/fabriziobertocci/rtipkg-config/issues"
+  },
+  "homepage": "https://github.com/fabriziobertocci/rtipkg-config#readme"
+}
