@@ -47,7 +47,7 @@ The tool can be invoked in two ways:
 
 
 
-### Usage examples
+### Examples
 
 Show all the supported Linux 64-bit targets: 
 
@@ -87,4 +87,7 @@ $ ./rtipkg-config --debug --static --ldflags x64Linux2.6gcc4.5.1
   * Linux: `pkg -t node10-linux-x64 rtipkg-config.js`
   * Windows:  `pkg -t node10-win-x64 rtipkg-config.js`
   * MacOS: `pkg -t node10-linux-x64 rtipkg-config.js`
-* 
+* To install this application on your RTI Connext DDS Install (so it stays together with your installation):
+  * Copy the script: `bin/rtipkg-config` under `$NDDSHOME/bin`
+  * Copy the compiled version of rtipkg-config under: `$NDDSHOME/resource/app/bin/<hostPlatform>` (where <hostPlatform> is the name of the directory containing platform-specific binaries).
+
