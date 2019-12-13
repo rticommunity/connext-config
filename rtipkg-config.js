@@ -1,20 +1,30 @@
 #!/usr/bin/env node
 
 /******************************************************************************
- * (c) Copyright, Real-Time Innovations, Inc. 2001.  All rights reserved.
- * No duplications, whole or partial, manual or electronic, may be made
- * without prior written permission.  Any such copies, or
- * revisions thereof, must display this notice unaltered.
- * This code contains trade secrets of Real-Time Innovations, Inc.
- */
+ *
+ * Copyright 2019 Fabrizio Bertocci (fabriziobertocci@gmail.com)
+ * 
+ * rtipkg-config is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * rtipkg-config is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with rtipkg-config.  If not, see <http://www.gnu.org/licenses/>.
+ * 
+/******************************************************************************
 
 /* Takes the rtiddsgen master template file containing the definition of
  * the project files (compilers, flags, linker, libs...), parses it and
- * build a series of files (one for each listed target architecture, that
- * can be parseable from a bash script (key-value pairs):
+ * made it available internally into a Javascript array of architecture
+ * definitions.
  *
- * File name = <architectureName>
- * Variables defined in file:
+ * This object contains properties like the following:
  *      OS
  *      PLATFORMS
  *      C_COMPILER
@@ -45,6 +55,7 @@ const fs=require('fs');
 const path=require('path');
 
 const APPLICATION_NAME = "rtipkg-config";
+const APPLICATION_VERSION = "0.9.8";        // Because why not?
 
 const EXIT_SUCCESS = 0;
 const EXIT_INVALID_ARGS = 1;
@@ -90,8 +101,11 @@ let argNoExpand = false;
 // {{{ usage
 // -----------------------------------------------------------------------------
 function usage() {
-    console.log(`Usage: 
-    ${APPLICATION_NAME} [-h|--help]
+    console.log(`
+RTI Package Config version ${APPLICATION_VERSION}
+------------------------------------------------------------------------------
+Usage: 
+    ${APPLICATION_NAME} [-h|--help|-V|--version]
     ${APPLICATION_NAME} --list-all
     ${APPLICATION_NAME} [modifiers] <what> <targetArch>
 
@@ -203,6 +217,11 @@ if (process.argv.length < 3) {
 if ((process.argv.length == 3) && 
         ((process.argv[2] == '-h') || (process.argv[2] == '--help'))) {
     usage();
+    process.exit(EXIT_SUCCESS);
+}
+if ((process.argv.length == 3) && 
+        ((process.argv[2] == '-V') || (process.argv[2] == '--version'))) {
+    console.log(`${APPLICATION_NAME} v.${APPLICATION_VERSION}`);
     process.exit(EXIT_SUCCESS);
 }
 if ((process.argv.length == 3) && (process.argv[2] == '--list-all')) {

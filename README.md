@@ -7,8 +7,10 @@ A small command-line utiity, similar to pkg-config that help supply build inform
 ## Usage
 
 ```
+RTI Package Config version 0.9.8
+------------------------------------------------------------------------------
 Usage:
-    rtipkg-config [-h|--help]
+    rtipkg-config [-h|--help|-V|--version]
     rtipkg-config --list-all
     rtipkg-config [modifiers] <what> <targetArch>
 
