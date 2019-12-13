@@ -1,10 +1,8 @@
 #########################################################################
 # APPLICATION SECTION
 #########################################################################
-AUTOMAKE_OPTIONS = subdir-objects
 
-#bin_PROGRAMS = Hello
-noinst_PROGRAMS = Hello
+bin_PROGRAMS = Hello
 
 noinst_HEADERS = Hello.h \
 		 HelloPublisher.h \

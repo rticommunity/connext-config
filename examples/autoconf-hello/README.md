@@ -1,21 +1,21 @@
 # Hello Builtin
 
-This is the RTI Connext DDS example that you can find in your RTI workspace 
-directory: `rti_workspace/<version>/examples/connext_dds/c/hello_builtin`
+This is the RTI Connext DDS example copied from the example directory in the RTI workspace: `rti_workspace/<VersionNumber>/examples/connext_dds/c/hello_builtin`
 
-This version uses autoconf/automake to generate a Makefile for the target
-architecture selectable during the `./configure` phase.
+This version uses the same source files (Hello.c, Hello.h, ...) but uses the autotools (autoconf, automake) to generate a Makefile for the target architecture selectable during the `./configure` phase.
 
 The configure script make use of the `rtipkg-config` tool to determine
 the correct build flags.
 
-To generate configure script, run:
+To generate the `configure` script, you need to have autoconf and automake installed in your system, then run:
 
 ```
-$ autoreconf -iv [-f to force]
+$ autoreconf -ivf
 ```
 
-Then, for example run configure and build for target `x64Linux4gcc7.3.0` with:
+
+
+Once you have the ./configure script you can use it, for example, to build for target `x64Linux4gcc7.3.0` with:
 
 ```
 $ ./configure --enable-target=x64Linux4gcc7.3.0 \
@@ -26,3 +26,11 @@ $ make
 ```
 
 
+
+To easily repackage the project for distribution, use:
+
+```
+make dist
+```
+
+That will produce a ready-to-ship tar file (`hello-1.0.tar.gz` ) with all the necessary files so you won't need anymore the autotools installed to build the application.
