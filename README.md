@@ -6,7 +6,7 @@ A small command-line utiity, similar to pkg-config that help supply build inform
 
 ## Usage
 
-```sh
+```
 Usage:
     rtipkg-config [-h|--help]
     rtipkg-config --list-all
@@ -51,7 +51,7 @@ The tool can be invoked in two ways:
 
 Show all the supported Linux 64-bit targets: 
 
-```sh
+```
 $ ./rtipkg-config --list-all | grep x64Linux
 x64Linux2.6gcc3.4.5
 x64Linux2.6gcc4.1.1
@@ -63,7 +63,7 @@ x64Linux2.6gcc4.1.2
 
 Show the C compiler to use for the target architecture `ppc4xxFPLinux2.6gcc4.5.1`:
 
-```sh
+```
 $ ./rtipkg-config --ccomp ppc4xxFPLinux2.6gcc4.5.1
 powerpc-ngc-linux-gcc
 ```
@@ -72,10 +72,20 @@ powerpc-ngc-linux-gcc
 
 Shows the linker flags to use when statically linking (`--static`) C applications on `x64Linux2.6gcc4.5.1` with debugging information (`--debug`):
 
-```sh
+```
 $ ./rtipkg-config --debug --static --ldflags x64Linux2.6gcc4.5.1
 -L/Users/fabrizio/working/rti_connext_dds-6.0.0/lib/x64Linux2.6gcc4.5.1 -lnddsczd -lnddscorezd -ldl -lnsl -lm -lpthread -lrt
 ```
+
+
+
+### Hello Builtin
+
+Inside the `examples` directory you can find the `examples/connext_dds/c/hello_builtin` example that is part of the installed `rti_workspace`. This example uses autoconf/automake to invoke `rtipkg-config` to determine the correct build settings. 
+
+Refer to the [README.md](examples/autoconf-hello/README.md) file for additional information.
+
+
 
 
 
@@ -90,4 +100,3 @@ $ ./rtipkg-config --debug --static --ldflags x64Linux2.6gcc4.5.1
 * To install this application on your RTI Connext DDS Install (so it stays together with your installation):
   * Copy the script: `bin/rtipkg-config` under `$NDDSHOME/bin`
   * Copy the compiled version of rtipkg-config under: `$NDDSHOME/resource/app/bin/<hostPlatform>` (where <hostPlatform> is the name of the directory containing platform-specific binaries).
-
