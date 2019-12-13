@@ -70,7 +70,7 @@ const $CPU = {};
 const VALID_WHAT = [
     "--list-all",
     "--ccomp", "--clink", "--cxxcomp", "--cxxlink", "--cflags", "--cxxflags",
-    "--ldflags", "--ldxxflags",
+    "--ldflags", "--ldxxflags", "--ldlibs", "--ldxxlibs",
     "--os", "--platform"
 ];
 
@@ -110,6 +110,8 @@ And <what> (required) is one of:
     --cxxflags  output all pre-processor and compiler flags for C++ compiler
     --ldflags   output the linker flags to use when building C programs
     --ldxxflags output the linker flags to use when building C++ programs
+    --ldlibs    output the required libraries for C programs
+    --ldxxlibs  output the required libraries for C++ programs
     --os        output the OS (i.e. UNIX, ANDROID, IOS, ...)
     --platform  output the Platform (i.e. i86, x64, armv7a, ...)
 
@@ -364,11 +366,19 @@ switch(argOp) {
         break;
 
     case "--ldflags":
-        console.log([targetDef.C_LINKER_FLAGS, nddsCLibs, targetDef.SYSLIBS].join(' ').trim());
+        console.log(targetDef.C_LINKER_FLAGS);
         break;
 
     case "--ldxxflags":
-        console.log([targetDef.CXX_LINKER_FLAGS, nddsCPPLibs, targetDef.SYSLIBS].join(' ').trim());
+        console.log(targetDef.CXX_LINKER_FLAGS);
+        break;
+
+    case "--ldlibs":
+        console.log([nddsCLibs, targetDef.SYSLIBS].join(' ').trim());
+        break;
+
+    case "--ldxxlibs":
+        console.log([nddsCPPLibs, targetDef.SYSLIBS].join(' ').trim());
         break;
 
     case "--os":
