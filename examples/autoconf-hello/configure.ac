@@ -59,8 +59,10 @@ dnl ****************************************************************************
 AC_ARG_WITH(connextdds,
 [  --with-connextdds=ARG   specify the location of RTI Connext DDS (optional)],
 [
-        if test "${withval}" = "yes"; then
+        if test "a${withval}a" = "aa"; then
             AC_MSG_ERROR(missing argument for --with-connextdds parameter);
+        elif test "${withval}" = "yes"; then
+            AC_MSG_ERROR(you must specify a value for --with-connextdds parameter);
         else
             NDDSHOME="${withval}"
         fi
@@ -93,12 +95,14 @@ AC_ARG_ENABLE(target,
         if test "${enableval}" = "yes"; then
             AC_MSG_ERROR(missing argument for --enable-target parameter);
         else
+            AC_MSG_RESULT(Using rtipkg-config to validate target...)
             if test -z `rtipkg-config --list-all | grep ${enableval}`; then
                 AC_MSG_ERROR(invalid or unsupported target type);
             fi
             if test $? -ne 0; then
                 AC_MSG_ERROR(error invoking rtipkg-config, check log for details)
             fi
+            AC_MSG_RESULT(Using rtipkg-config to retrieve build settings...)
             CC="`rtipkg-config --ccomp ${enableval}`"
             LD="`rtipkg-config --clink ${enableval}`"
             CFLAGS="$CFLAGS `rtipkg-config $RTICFG_STATIC $RTICFG_DEBUG --cflags ${enableval}`"
