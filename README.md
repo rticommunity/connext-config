@@ -101,6 +101,7 @@ Refer to the [README.md](examples/autoconf-hello/README.md) file for additional 
 * The tool look at the target definition from the platform file used by rtiddsgen. This file is located under the following directory: `$NDDSHOME/resource/app/app_support/rtiddsgen/templates/projectfiles/platforms.vm`
 * `rtipkg-config` will first use the environment variable `$NDDSHOME` to locate the platform file above. If `$NDDSHOME` is not defined, it will attempt to determine the location of the platform file from the location of the `rtipkg-config` application.
 * The `--debug` option affects only the name of the required libraries and NOT the C or C++ compiler flags (for example, it does not include `-g` or disable any optimization). 
+* All the Windows architectures are **not supported**. 
 * To generate a stand-alone executable from the node.js application, you can use [pkg](https://www.npmjs.com/package/pkg) with node v10:
   * Linux: `pkg -t node10-linux-x64 rtipkg-config.js`
   * Windows:  `pkg -t node10-win-x64 rtipkg-config.js`
