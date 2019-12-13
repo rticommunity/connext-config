@@ -27,7 +27,6 @@ And <what> (required) is one of:
     --cxxflags  output all pre-processor and compiler flags for C++ compiler
     --ldflags   output the linker flags to use when building C programs
     --ldxxflags output the linker flags to use when building C++ programs
-    --libs      output all linker flags (including syslibs)
     --ldlibs    output the required libraries for C programs
     --ldxxlibs  output the required libraries for C++ programs
     --os        output the OS (i.e. UNIX, ANDROID, IOS, ...)
