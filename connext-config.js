@@ -312,6 +312,15 @@ let all = platformAll.split("#arch")
 // Skip first element since is everything up to the first arch definition
 for (let i=1; i < all.length; ++i) {
     let arch = all[i];
+
+    // Hack: fix a bug in the platform.vm shipped with RTI Connext DDS versions 6.0.1 and earlier
+    //       where the template file have a missing comma for some architectures:
+    //       For example, for Connext 6.0.1, the platform.vm contains:
+    //              #arch("armv7Linux3.0","gcc4.6.1.cortex-a9" { 
+    //       (there is a missing comma before the open brace).
+    //       This command performs a search and replace inside each arch definition to fix that
+    arch = arch.replace(/" {/g, "\", {");
+
     // arch is now something like this: ("i86Sol2.9","gcc3.3.2", {\n    $OS : $OS.UNIX,\n   ...
     // Remove all the extra comments that sometimes are placed after the definition by
     // splitting by '})\n' and taking the first element only (then re-append the '})' element)
