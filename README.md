@@ -105,8 +105,7 @@ Refer to the [README.md](examples/autoconf-hello/README.md) file for additional 
 * All the Windows architectures are **not supported**. 
 * To generate a stand-alone executable from the node.js application, you can use [pkg](https://www.npmjs.com/package/pkg) with node v10:
   * Linux: `pkg -t node10-linux-x64 connext-config.js`
-  * Windows:  `pkg -t node10-win-x64 connext-config.js`
-  * MacOS: `pkg -t node10-linux-x64 connext-config.js`
+  * MacOS: `pkg -t node10-darwin-x64 connext-config.js`
 * To install this application on your RTI Connext DDS Install (so it stays together with your installation):
   * Copy the script: `bin/connext-config` under `$NDDSHOME/bin`
   * Copy the compiled version of connext-config under: `$NDDSHOME/resource/app/bin/<hostPlatform>` (where <hostPlatform> is the name of the directory containing platform-specific binaries).
