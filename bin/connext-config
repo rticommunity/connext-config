@@ -9,7 +9,7 @@
 
 filename=$0
 script_dir=`cd "\`dirname "$filename"\`"; pwd`
-executable_name="rtipkg-config"
+executable_name="connext-config"
 script_version=6.0.0
 
 rticommon_script_dir=$script_dir/../resource/scripts

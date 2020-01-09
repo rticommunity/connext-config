@@ -4,18 +4,18 @@
  *
  * Copyright 2019 Fabrizio Bertocci (fabriziobertocci@gmail.com)
  * 
- * rtipkg-config is free software: you can redistribute it and/or modify
+ * connext-config is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version.
  * 
- * rtipkg-config is distributed in the hope that it will be useful,
+ * connext-config is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  * 
  * You should have received a copy of the GNU General Public License
- * along with rtipkg-config.  If not, see <http://www.gnu.org/licenses/>.
+ * along with connext-config.  If not, see <http://www.gnu.org/licenses/>.
  * 
 /******************************************************************************
 
@@ -54,7 +54,7 @@
 const fs=require('fs');
 const path=require('path');
 
-const APPLICATION_NAME = "rtipkg-config";
+const APPLICATION_NAME = "connext-config";
 const APPLICATION_VERSION = "0.9.8";        // Because why not?
 
 const EXIT_SUCCESS = 0;
@@ -102,7 +102,7 @@ let argNoExpand = false;
 // -----------------------------------------------------------------------------
 function usage() {
     console.log(`
-RTI Package Config version ${APPLICATION_VERSION}
+RTI ConnextDDS Config version ${APPLICATION_VERSION}
 ------------------------------------------------------------------------------
 Usage: 
     ${APPLICATION_NAME} [-h|--help|-V|--version]
@@ -207,7 +207,7 @@ function processArch(os, comp, def) {
 // Main code starts here
 // ----------------------------------------------------------------------------
 // argv[0] = 'node'
-// argv[1] = 'rtipkg-config'
+// argv[1] = 'connext-config'
 // argv[2] = fist argument
 // ...
 if (process.argv.length < 3) {
@@ -314,7 +314,7 @@ for (let i=1; i < all.length; ++i) {
     let arch = all[i];
     // arch is now something like this: ("i86Sol2.9","gcc3.3.2", {\n    $OS : $OS.UNIX,\n   ...
     // Remove all the extra comments that sometimes are placed after the definition by
-    // splitting by '})\n' and taking the first element only (then re-append the '})' elemento)
+    // splitting by '})\n' and taking the first element only (then re-append the '})' element)
     arch="processArch" + arch.split('})\n')[0] + "})";
 
     // What we got now is a something that resemble to a function call:

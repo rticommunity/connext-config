@@ -90,24 +90,24 @@ dnl * Target kind
 dnl **********************************************************************************************
 AC_ARG_ENABLE(target,
 [  --enable-target=ARG     specify the target architecture (required)
-                          Use 'rtipkg-config --list-all' to view the supported targets ],
+                          Use 'connext-config --list-all' to view the supported targets ],
 [
         if test "${enableval}" = "yes"; then
             AC_MSG_ERROR(missing argument for --enable-target parameter);
         else
-            AC_MSG_RESULT(Using rtipkg-config to validate target...)
-            if test -z `rtipkg-config --list-all | grep ${enableval}`; then
+            AC_MSG_RESULT(Using connext-config to validate target...)
+            if test -z `connext-config --list-all | grep ${enableval}`; then
                 AC_MSG_ERROR(invalid or unsupported target type);
             fi
             if test $? -ne 0; then
-                AC_MSG_ERROR(error invoking rtipkg-config, check log for details)
+                AC_MSG_ERROR(error invoking connext-config, check log for details)
             fi
-            AC_MSG_RESULT(Using rtipkg-config to retrieve build settings...)
-            CC="`rtipkg-config --ccomp ${enableval}`"
-            LD="`rtipkg-config --clink ${enableval}`"
-            CFLAGS="$CFLAGS `rtipkg-config $RTICFG_STATIC $RTICFG_DEBUG --cflags ${enableval}`"
-            LDFLAGS="`rtipkg-config $RTICFG_STATIC $RTICFG_DEBUG --ldflags ${enableval}`"
-            LIBS="`rtipkg-config $RTICFG_STATIC $RTICFG_DEBUG --ldlibs ${enableval}`"
+            AC_MSG_RESULT(Using connext-config to retrieve build settings...)
+            CC="`connext-config --ccomp ${enableval}`"
+            LD="`connext-config --clink ${enableval}`"
+            CFLAGS="$CFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --cflags ${enableval}`"
+            LDFLAGS="`connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldflags ${enableval}`"
+            LIBS="`connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldlibs ${enableval}`"
         fi
         AC_MSG_RESULT(Building for target ${enableval} system)
 ],[

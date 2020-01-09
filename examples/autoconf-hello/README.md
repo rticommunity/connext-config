@@ -4,7 +4,7 @@ This is the RTI Connext DDS example copied from the example directory in the RTI
 
 This version uses the same source files (Hello.c, Hello.h, ...) but uses the autotools (autoconf, automake) to generate a Makefile for the target architecture selectable during the `./configure` phase.
 
-The configure script make use of the `rtipkg-config` tool to determine
+The configure script make use of the `connext-config` tool to determine
 the correct build flags.
 
 To generate the `configure` script, you need to have autoconf and automake installed in your system, then run:
