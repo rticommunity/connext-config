@@ -1,4 +1,4 @@
-# RTI ConnextDDS Config
+# RTI Connext DDS Config
 
 A small command-line utiity, similar to pkg-config that help supply build information for a given architecture
 
@@ -7,7 +7,7 @@ A small command-line utiity, similar to pkg-config that help supply build inform
 ## Usage
 
 ```
-RTI ConnextDDS Config version 0.9.8
+RTI Connext DDS Config version 0.9.8
 ------------------------------------------------------------------------------
 Usage:
     connext-config [-h|--help|-V|--version]
