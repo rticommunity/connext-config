@@ -102,7 +102,7 @@ let argNoExpand = false;
 // -----------------------------------------------------------------------------
 function usage() {
     console.log(`
-RTI ConnextDDS Config version ${APPLICATION_VERSION}
+RTI Connext DDS Config version ${APPLICATION_VERSION}
 ------------------------------------------------------------------------------
 Usage: 
     ${APPLICATION_NAME} [-h|--help|-V|--version]
@@ -158,7 +158,6 @@ function processArch(os, comp, def) {
     }
     let targetArch = `${os}${comp}`;
     let obj = {};
-    theArchDef[targetArch] = obj;
     Object.keys(def).forEach( key => {
         // key is '$OS', '$BLAH'...
         let goodKey = key.substr(1);        // remove the "$" from the key name
@@ -199,6 +198,12 @@ function processArch(os, comp, def) {
         }
         obj[goodKey] = val;
     })
+    if (obj['HIDDEN'] === true) {
+        // Skip hidden architectures
+        return;
+    }
+    // Else, append this arch
+    theArchDef[targetArch] = obj;
 }
 
 // }}}
