@@ -18,27 +18,20 @@ AM_PROG_CC_C_O
 
 AC_CONFIG_MACRO_DIRS([m4])
 
-RTICFG_STATIC=""
-dnl **********************************************************************************************
-dnl * Static/Dynamic                                                                             *
-dnl **********************************************************************************************
-AC_ARG_ENABLE(dynamic,
-[  --enable-dynamic        uses RTI dynamic libraries instead of static lib],
-[],[
-        RTICFG_STATIC="--static"
-])
 
 dnl **********************************************************************************************
 dnl * Debug/Release                                                                              *
 dnl **********************************************************************************************
-RTICFG_DEBUG=""
 AC_ARG_ENABLE(debug,
 [  --enable-debug          enable full debugging information (and disable optimization)],
 [
-        CFLAGS="-g -O0 -DDEBUG"
-        RTICFG_DEBUG="--debug"
+      CFLAGS="-g -O0"
+      DEBUG_ENABLED=1
+      AC_DEFINE([DEBUG],1,[])
 ],[
-        CFLAGS="-O2 -DNDEBUG"
+      CFLAGS="-O2 -DNDEBUG"
+      DEBUG_ENABLED=0
+      AC_DEFINE([NDEBUG],1,[])
 ])
 
 
@@ -53,67 +46,7 @@ AC_ARG_ENABLE(warnings,
         CFLAGS="$CFLAGS -W -Wimplicit-fallthrough=0"
 ])
 
-dnl **********************************************************************************************
-dnl * Connext DDS
-dnl **********************************************************************************************
-AC_ARG_WITH(connextdds,
-[  --with-connextdds=ARG   specify the location of RTI Connext DDS (optional)],
-[
-        if test "a${withval}a" = "aa"; then
-            AC_MSG_ERROR(missing argument for --with-connextdds parameter);
-        elif test "${withval}" = "yes"; then
-            AC_MSG_ERROR(you must specify a value for --with-connextdds parameter);
-        else
-            NDDSHOME="${withval}"
-        fi
-],[
-        AC_MSG_RESULT(Checking for NDDSHOME...)
-        if test "a${NDDSHOME}a" = "aa"; then
-            AC_MSG_ERROR(NDDSHOME not defined. You must specify the --with-connextdds argument);
-        else
-            NDDSSHOME="${NDDSHOME}"
-        fi
-])
-
-dnl Verify the provided location
-AC_CHECK_FILE("${NDDSHOME}/include/ndds/ndds_c.h", 
-[
-        AC_MSG_RESULT(Found RTI Connext DDS at ${NDDSHOME})
-],[
-        AC_MSG_ERROR(RTI Connext DDS not found or NDDSHOME not defined)
-])
-
-
-
-dnl **********************************************************************************************
-dnl * Target kind
-dnl **********************************************************************************************
-AC_ARG_ENABLE(target,
-[  --enable-target=ARG     specify the target architecture (required)
-                          Use 'connext-config --list-all' to view the supported targets ],
-[
-        if test "${enableval}" = "yes"; then
-            AC_MSG_ERROR(missing argument for --enable-target parameter);
-        else
-            AC_MSG_RESULT(Using connext-config to validate target...)
-            if test -z `connext-config --list-all | grep ${enableval}`; then
-                AC_MSG_ERROR(invalid or unsupported target type);
-            fi
-            if test $? -ne 0; then
-                AC_MSG_ERROR(error invoking connext-config, check log for details)
-            fi
-            AC_MSG_RESULT(Using connext-config to retrieve build settings...)
-            CC="`connext-config --ccomp ${enableval}`"
-            LD="`connext-config --clink ${enableval}`"
-            CFLAGS="$CFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --cflags ${enableval}`"
-            LDFLAGS="`connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldflags ${enableval}`"
-            LIBS="`connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldlibs ${enableval}`"
-        fi
-        AC_MSG_RESULT(Building for target ${enableval} system)
-],[
-        AC_MSG_ERROR(you must specify --enable-target with a valid target. See --help for more info)
-])
-
+m4_include([m4/rticonnextdds.m4])
 
 AC_OUTPUT(Makefile src/Makefile)
 
