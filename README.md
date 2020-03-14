@@ -7,7 +7,7 @@ A small command-line utiity, similar to pkg-config that help supply build inform
 ## Usage
 
 ```
-RTI Connext DDS Config version 0.9.8
+RTI Connext DDS Config version 0.9.9
 ------------------------------------------------------------------------------
 Usage:
     connext-config [-h|--help|-V|--version]
@@ -18,7 +18,7 @@ Where [modifiers] are:
     --static    use static linking against RTI Connext DDS
     --debug     use debug version of the RTI Connext DDS libraries
     --sh        use shell-like variable expansion (vs. make-like variables)
-    --noexpand  do not expand NDDSHOME variable in output
+    --noexpand  do not expand environment variables in output
 
 And <what> (required) is one of:
     --ccomp     output the C compiler to use

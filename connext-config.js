@@ -55,7 +55,7 @@ const fs=require('fs');
 const path=require('path');
 
 const APPLICATION_NAME = "connext-config";
-const APPLICATION_VERSION = "0.9.8";        // Because why not?
+const APPLICATION_VERSION = "0.9.9";        // Because why not?
 
 const EXIT_SUCCESS = 0;
 const EXIT_INVALID_ARGS = 1;
