@@ -399,35 +399,35 @@ switch(argOp) {
         break;
 
     case "--cflags":
-        console.log([targetDef.C_COMPILER_FLAGS, targetDef.DEFINES, targetDef.INCLUDES, nddsFlags].join(' ').trim());
+        console.log(expandEnvVar([targetDef.C_COMPILER_FLAGS, targetDef.DEFINES, targetDef.INCLUDES, nddsFlags].join(' ').trim()));
         break;
 
     case "--cxxflags":
-        console.log([targetDef.CXX_COMPILER_FLAGS, targetDef.DEFINES, targetDef.INCLUDES, nddsFlags].join(' ').trim());
+        console.log(expandEnvVar([targetDef.CXX_COMPILER_FLAGS, targetDef.DEFINES, targetDef.INCLUDES, nddsFlags].join(' ').trim()));
         break;
 
     case "--ldflags":
-        console.log(targetDef.C_LINKER_FLAGS);
+        console.log(expandEnvVar(targetDef.C_LINKER_FLAGS));
         break;
 
     case "--ldxxflags":
-        console.log(targetDef.CXX_LINKER_FLAGS);
+        console.log(expandEnvVar(targetDef.CXX_LINKER_FLAGS));
         break;
 
     case "--ldlibs":
-        console.log([nddsCLibs, targetDef.SYSLIBS].join(' ').trim());
+        console.log(expandEnvVar([nddsCLibs, targetDef.SYSLIBS].join(' ').trim()));
         break;
 
     case "--ldxxlibs":
-        console.log([nddsCPPLibs, targetDef.SYSLIBS].join(' ').trim());
+        console.log(expandEnvVar([nddsCPPLibs, targetDef.SYSLIBS].join(' ').trim()));
         break;
 
     case "--os":
-        console.log(targetDef.OS);
+        console.log(expandEnvVar(targetDef.OS));
         break;
 
     case "--platform":
-        console.log(targetDef.PLATFORMS);
+        console.log(expandEnvVar(targetDef.PLATFORMS));
         break;
 
     default:
