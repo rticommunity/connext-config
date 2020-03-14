@@ -113,7 +113,7 @@ Where [modifiers] are:
     --static    use static linking against RTI Connext DDS
     --debug     use debug version of the RTI Connext DDS libraries
     --sh        use shell-like variable expansion (vs. make-like variables)
-    --noexpand  do not expand NDDSHOME variable in output
+    --noexpand  do not expand environment variables in output
 
 And <what> (required) is one of:
     --ccomp     output the C compiler to use
@@ -207,6 +207,14 @@ function processArch(os, comp, def) {
 }
 
 // }}}
+// {{{ expandEnvVar
+// -----------------------------------------------------------------------------
+function expandEnvVar(str) {
+    return (argNoExpand) ? str : (str.replace(/\$\(([^%]+)\)/g, (_,n) => process.env[n]===undefined?"":process.env[n]) );
+}
+
+// }}}
+
 
 // ----------------------------------------------------------------------------
 // Main code starts here
@@ -375,19 +383,19 @@ if (argNoExpand) {
 
 switch(argOp) {
     case "--ccomp":
-        console.log(targetDef.C_COMPILER);
+        console.log(expandEnvVar(targetDef.C_COMPILER));
         break;
 
     case "--clink":
-        console.log(targetDef.C_LINKER);
+        console.log(expandEnvVar(targetDef.C_LINKER));
         break;
 
     case "--cxxcomp":
-        console.log(targetDef.CXX_COMPILER);
+        console.log(expandEnvVar(targetDef.CXX_COMPILER));
         break;
 
     case "--cxxlink":
-        console.log(targetDef.CXX_LINKER);
+        console.log(expandEnvVar(targetDef.CXX_LINKER));
         break;
 
     case "--cflags":
