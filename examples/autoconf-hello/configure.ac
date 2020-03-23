@@ -1,6 +1,7 @@
-dnl **********************************************************************************
-dnl (c) Copyright 2018, Real-Time Innovations, Inc. All rights reserved.
-dnl **********************************************************************************
+dnl ****************************************************************************
+dnl * (c) Copyright 2020, Real-Time Innovations, Inc. All rights reserved.     *
+dnl * Subject to Eclipse Public License v1.0; see LICENSE.md for details.      *
+dnl ****************************************************************************
 
 AC_INIT(Hello, 1.0, fabrizio@rti.com)
 AC_CONFIG_SRCDIR([src/Hello.c])
@@ -19,9 +20,9 @@ AM_PROG_CC_C_O
 AC_CONFIG_MACRO_DIRS([m4])
 
 
-dnl **********************************************************************************************
-dnl * Debug/Release                                                                              *
-dnl **********************************************************************************************
+dnl ****************************************************************************
+dnl Debug/Release
+dnl ****************************************************************************
 AC_ARG_ENABLE(debug,
 [  --enable-debug          enable full debugging information (and disable optimization)],
 [
@@ -35,9 +36,9 @@ AC_ARG_ENABLE(debug,
 ])
 
 
-dnl **********************************************************************************************
-dnl * Enable/disable compiler warnings                                                           *
-dnl **********************************************************************************************
+dnl ****************************************************************************
+dnl Enable/disable compiler warnings
+dnl ****************************************************************************
 AC_ARG_ENABLE(warnings,
 [  --enable-warnings       enable compiler warnings during build ],
 [

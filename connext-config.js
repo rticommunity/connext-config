@@ -1,23 +1,10 @@
 #!/usr/bin/env node
 
-/******************************************************************************
- *
- * Copyright 2019 Fabrizio Bertocci (fabriziobertocci@gmail.com)
- * 
- * connext-config is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 2 of the License, or
- * (at your option) any later version.
- * 
- * connext-config is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with connext-config.  If not, see <http://www.gnu.org/licenses/>.
- * 
-/******************************************************************************
+/*****************************************************************************
+ * Copyright 2020 Real-Time Innovations, Inc.                                *
+ * Author: fabriziobertocci@gmail.com                                        *
+ * Subject to Eclipse Public License v1.0; see LICENSE.md for details.       *
+ *****************************************************************************/
 
 /* Takes the rtiddsgen master template file containing the definition of
  * the project files (compilers, flags, linker, libs...), parses it and

@@ -1,6 +1,7 @@
-dnl **********************************************************************************
-dnl (c) Copyright 2020, Real-Time Innovations, Inc. All rights reserved.
-dnl **********************************************************************************
+dnl ****************************************************************************
+dnl * (c) Copyright 2020, Real-Time Innovations, Inc. All rights reserved.     *
+dnl * Subject to Eclipse Public License v1.0; see LICENSE.md for details.      *
+dnl ****************************************************************************
 dnl
 dnl Check for RTI ConnextDDS
 dnl
@@ -18,10 +19,9 @@ dnl     NDDSHOME (if not already specified)
 dnl     RTICFG_STATIC = "" | "--static"
 dnl
 
-
-dnl **********************************************************************************************
-dnl * --with-rticonnextdds
-dnl **********************************************************************************************
+dnl ****************************************************************************
+dnl --with-rticonnextdds
+dnl ****************************************************************************
 AC_ARG_WITH(rticonnextdds,
 [AC_HELP_STRING([--with-rticonnextdds],[specify the location of RTI Connext DDS (optional)])],
 [
@@ -59,9 +59,9 @@ AC_CHECK_FILE("${NDDSHOME}/bin/connext-config",
 ])
 
 
-dnl **********************************************************************************************
-dnl * --with-rticonnextdds-static                                                              *
-dnl **********************************************************************************************
+dnl ****************************************************************************
+dnl --with-rticonnextdds-static                                                              *
+dnl ****************************************************************************
 RTICFG_STATIC=""
 AC_ARG_WITH([rticonnextdds-static],
     [AC_HELP_STRING([--with-rticonnextdds-static],[uses RTI static libraries instead of dynamic libs])],
@@ -75,9 +75,9 @@ AC_ARG_WITH([rticonnextdds-static],
 
 
 
-dnl **********************************************************************************************
-dnl * --with-rticonnextdds-target
-dnl **********************************************************************************************
+dnl ****************************************************************************
+dnl --with-rticonnextdds-target
+dnl ****************************************************************************
 AC_ARG_WITH(rticonnextdds-target,
 [AC_HELP_STRING([--with-rticonnextdds-target],[specify the target architecture for RTI Connext DDS (required). Use 'connext-config --list-all' to view the supported targets])],
 [
