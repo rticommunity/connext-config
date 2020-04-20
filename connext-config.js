@@ -197,7 +197,7 @@ function processArch(os, comp, def) {
 // {{{ expandEnvVar
 // -----------------------------------------------------------------------------
 function expandEnvVar(str) {
-    return (argNoExpand) ? str : (str.replace(/\$\(([^%]+)\)/g, (_,n) => process.env[n]===undefined?"":process.env[n]) );
+    return (argNoExpand) ? str : (str.replace(/\$\(([^)]+)\)/g, (_,n) => process.env[n]===undefined?"":process.env[n]) );
 }
 
 // }}}
