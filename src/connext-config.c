@@ -360,7 +360,7 @@ int printStringProperty(struct Architecture *arch, const char *propertyName, int
 // Note: the returned string is terminated with a space (so you can concatenate calls)
 // Returns the number of characters written or -1 if an error occurred.
 // Returns 0 if the array is empty.
-int writeStringArrayProperties(struct Architecture *arch, char *bufOut, size_t bufSize, const char *propertyName, const char *prefix) {
+int writeStringArrayProperties(struct Architecture *arch, char *bufOut, int bufSize, const char *propertyName, const char *prefix) {
     struct ArchParameter *ap = archGetParam(arch, propertyName);
     int i = 0;
     int wr = 0;
@@ -470,7 +470,7 @@ int printCompositeFlagsProperties(struct Architecture *arch,
 // Returns the pointer to the end quote (inside the original line) 
 // if success, or NULL if an error occurred.
 // In case of error *ptrErr contains the error message.
-char * parseStringInQuotes(char *line, char *bufOut, size_t bufOutLen, const char **errOut) {
+char * parseStringInQuotes(char *line, char *bufOut, int bufOutLen, const char **errOut) {
     char endl = '"';
     char *tmp2;
     char *tmp1 = line;
