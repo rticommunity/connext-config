@@ -12,5 +12,10 @@ install-sh
 Makefile.in
 missing
 
+# Temporary build files
+*.o
+connext-config
+.deps
+
 # Vim swap files
 .*.swp
