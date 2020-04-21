@@ -12,6 +12,10 @@ install-sh
 Makefile.in
 missing
 
+# Configure artifacts
+Makefile
+config.status
+
 # Temporary build files
 *.o
 connext-config
