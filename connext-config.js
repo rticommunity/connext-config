@@ -51,12 +51,12 @@ const EXIT_FAILURE = 3;
 
 // Define global $OS and $PLATFORM
 const $OS = {};
-["UNIX", "ANDROID", "IOS", "INTEGRITY", "VXWORKS", "WIN"].forEach( k => {
+["UNIX", "DARWIN", "QNX", "ANDROID", "IOS", "INTEGRITY", "VXWORKS", "WIN", "AIX"].forEach( k => {
     $OS[k] = k;
 });
 
 const $PLATFORM = {};
-["i86", "armv7", "armv7a", "x64", "ppc", "mips64"].forEach( k => {
+["i86", "armv7", "armv7a", "x64", "ppc", "mips64", "ppc6xx_be_rtp", "ppc6xx_be"].forEach( k => {
     $PLATFORM[k] = k;
 });
 
@@ -158,6 +158,7 @@ function processArch(os, comp, def) {
                 // if the key is 'INCLUDES' we need to compose the array with '-I' and not with just '-'
                 flag = '-I';
             }
+            /*
             let newval = "";
             let sep = "";
             for (let i in val) {
@@ -165,6 +166,10 @@ function processArch(os, comp, def) {
                 sep = ' ';
             }
             val = newval;
+            */
+            if (val.length > 0) {
+                val = flag + val.join(` ${flag}`);
+            }
         }
         if (argShell && (typeof(val) == 'string')) {
             // Some of the values reference an environment variable in the 
@@ -375,6 +380,15 @@ if (argNoExpand) {
     nddsCPPLibs = `-L${NDDSHOME}/lib/${argTarget} -lnddscpp${libSuffix} -lnddsc${libSuffix} -lnddscore${libSuffix}`;
 }
 
+
+// Add this method to Array to remove empty elements.
+//
+// NOTE: function does the same thing as arr.filter(Boolean), with the
+//       difference that it also remove empty arrays
+Array.prototype.removeEmpty = function() {
+    return this.filter( (e) => { return (e instanceof Array) ? (e.length > 0) : e } );
+}
+
 switch(argOp) {
     case "--ccomp":
         console.log(expandEnvVar(targetDef.C_COMPILER));
@@ -393,27 +407,27 @@ switch(argOp) {
         break;
 
     case "--cflags":
-        console.log(expandEnvVar([targetDef.C_COMPILER_FLAGS, targetDef.DEFINES, targetDef.INCLUDES, nddsFlags].join(' ').trim()));
+        console.log(expandEnvVar([targetDef.C_COMPILER_FLAGS, targetDef.DEFINES, targetDef.INCLUDES, nddsFlags].removeEmpty().join(' ').trim()));
         break;
 
     case "--cxxflags":
-        console.log(expandEnvVar([targetDef.CXX_COMPILER_FLAGS, targetDef.DEFINES, targetDef.INCLUDES, nddsFlags].join(' ').trim()));
+        console.log(expandEnvVar([targetDef.CXX_COMPILER_FLAGS, targetDef.DEFINES, targetDef.INCLUDES, nddsFlags].removeEmpty().join(' ').trim()));
         break;
 
     case "--ldflags":
-        console.log(expandEnvVar(targetDef.C_LINKER_FLAGS));
+        console.log(expandEnvVar([targetDef.C_LINKER_FLAGS].removeEmpty().join(' ').trim()));
         break;
 
     case "--ldxxflags":
-        console.log(expandEnvVar(targetDef.CXX_LINKER_FLAGS));
+        console.log(expandEnvVar([targetDef.CXX_LINKER_FLAGS].removeEmpty().join(' ').trim()));
         break;
 
     case "--ldlibs":
-        console.log(expandEnvVar([nddsCLibs, targetDef.SYSLIBS].join(' ').trim()));
+        console.log(expandEnvVar([nddsCLibs, targetDef.SYSLIBS, targetDef.C_SYSLIBS].removeEmpty().join(' ').trim()));
         break;
 
     case "--ldxxlibs":
-        console.log(expandEnvVar([nddsCPPLibs, targetDef.SYSLIBS].join(' ').trim()));
+        console.log(expandEnvVar([nddsCPPLibs, targetDef.SYSLIBS, targetDef.CXX_SYSLIBS].removeEmpty().join(' ').trim()));
         break;
 
     case "--os":
