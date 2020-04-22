@@ -211,6 +211,7 @@ void dumpArch(struct SimpleList *list) {
 }
 
 // }}}
+
 // {{{ archGetParam
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 struct ArchParameter * archGetParam(struct Architecture *arch, const char *key) {
@@ -957,10 +958,12 @@ done:
 // -----------------------------------------------------------------------------
 void usage() {
     printf("RTI Connext DDS Config version %s\n", APPLICATION_VERSION); 
-    printf("------------------------------------------------------------------------------\n");
+    printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
     printf("Usage:\n");
-    printf("    %s [-h|--help|-V|--version]\n", APPLICATION_NAME);
-    printf("    %s --list-all\n", APPLICATION_NAME);
+    printf("    %s -h|--help    Show this help\n", APPLICATION_NAME);
+    printf("    %s -V|--version Prints version number\n", APPLICATION_NAME);
+    printf("    %s --list-all   List all platform architectures supported\n", APPLICATION_NAME);
+    printf("    %s --dump-all   Dump all platforms and all settings (testing only)\n", APPLICATION_NAME);
     printf("    %s [modifiers] <what> <targetArch>\n", APPLICATION_NAME);
     printf("\n");
     printf("Where [modifiers] are:\n");
@@ -969,7 +972,7 @@ void usage() {
     printf("    --sh        use shell-like variable expansion (vs. make-like variables)\n");
     printf("    --noexpand  do not expand environment variables in output\n");
     printf("\n");
-    printf("And <what> (required) is one of:\n");
+    printf("Required argument <what> is one of:\n");
     printf("    --ccomp     output the C compiler to use\n");
     printf("    --clink     output the C linker to use\n");
     printf("    --cxxcomp   output the C++ compiler to use\n");
@@ -983,8 +986,8 @@ void usage() {
     printf("    --os        output the OS (i.e. UNIX, ANDROID, IOS, ...)\n");
     printf("    --platform  output the Platform (i.e. i86, x64, armv7a, ...)\n");
     printf("\n");
-    printf("<targetArch> is one of the supported target architectures. Use --list-all\n");
-    printf("to output a list of supported architectures\n");
+    printf("Required argument <targetArch> is one of the supported target architectures.\n");
+    printf("Use `--list-all` to output a list of supported architectures\n");
 }
 
 // }}}
@@ -1026,7 +1029,9 @@ int main(int argc, char **argv) {
         retCode = APPLICATION_EXIT_SUCCESS;
         goto done;
     }
-    if ((argc == 2) && !strcmp(argv[1], "--list-all")) {
+    if ((argc == 2) && (
+                !strcmp(argv[1], "--list-all") || 
+                !strcmp(argv[1], "--dump-all"))) {
         argOp = argv[1];
 
     } else {
@@ -1066,7 +1071,7 @@ int main(int argc, char **argv) {
                 continue;
             }
             usage();
-            printf("Error: invalid argument: %s\n", argv[i]);
+            fprintf(stderr, "Error: invalid argument: %s\n", argv[i]);
             retCode = APPLICATION_EXIT_INVALID_ARGS;
             goto done;
         }
@@ -1079,8 +1084,8 @@ int main(int argc, char **argv) {
         }
         if (!strncmp(argTarget, "--", 2)) {
             usage();
-            printf("Error: missing target architecture\n");
-            printf("Use --list-all to print all the supported architectures\n");
+            fprintf(stderr, "Error: missing target architecture\n");
+            fprintf(stderr, "Use --list-all to print all the supported architectures\n");
             retCode = APPLICATION_EXIT_INVALID_ARGS;
             goto done;
         }
@@ -1130,7 +1135,6 @@ int main(int argc, char **argv) {
         tmp = dirname(NDDSHOME);
         strncpy(NDDSHOME, tmp, PATH_MAX);
     }
-    // printf("Using NDDSHOME=%s\n", NDDSHOME);
 
     // Complete building the path to the platform.vm file:
     platformFile = calloc(PATH_MAX+1, 1);
@@ -1140,11 +1144,14 @@ int main(int argc, char **argv) {
         goto done;
     }
     snprintf(platformFile, PATH_MAX, "%s/resource/app/app_support/rtiddsgen/templates/projectfiles/platforms.vm", NDDSHOME);
-    // printf("Using platformFile=%s\n", platformFile);
 
     // Read and parse platform file
     readPlatformFile(platformFile, &archDef);
-    //dumpArch(&archDef);
+    if (!strcmp(argOp, "--dump-all")) {
+        dumpArch(&archDef);
+        retCode = APPLICATION_EXIT_SUCCESS;
+        goto done;
+    }
 
     if (!strcmp(argOp, "--list-all")) {
         struct SimpleListNode *archNode;
