@@ -225,6 +225,51 @@ struct ArchParameter * archGetParam(struct Architecture *arch, const char *key) 
 }
 
 // }}}
+// {{{ unescapeString
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Given a string (potentially) containing escaped characters like \n, \",...
+// returns a static string of original values with the escaped characters
+// unescaped.
+char * unescapeString(char *in) {
+    static char retVal[MAX_CMDLINEARG_SIZE];
+    size_t rd = 0, wr = 0;
+    size_t len = strlen(in);
+    char ch;
+
+    memset(retVal, 0, MAX_CMDLINEARG_SIZE);
+
+    if (len > 1) {
+        // Stop at the second to the last char
+        for (rd=0, wr=0, --len; rd < len; ++rd,++wr) {
+            ch = in[rd];
+            if (ch == '\\') {
+                switch(in[++rd]) {
+                    case '"': ch = '"'; break;
+                    case '\'':  ch = '\''; break;
+                    case 'n': ch = '\n'; break;
+                    case 'r': ch = '\r'; break;
+                    case 't': ch = '\t'; break;
+                    case 'a': ch = '\a'; break; 
+                    case 'b': ch = '\b'; break;
+                    case 'f': ch = '\f'; break;
+                    case 'v': ch = '\v'; break;
+                    case '\\':  ch = '\\'; break;
+                    case '\?':  ch = '\?'; break;
+                    default:
+                        --rd;
+
+                }
+            }
+            retVal[wr] = ch;
+        }
+    } 
+    if (len > 0) {
+        retVal[wr] = in[rd];
+    }
+    return &retVal[0];
+}
+
+// }}}
 
 // {{{ arrayFind
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -365,19 +410,19 @@ int writeStringArrayProperties(struct Architecture *arch, char *bufOut, int bufS
     int i = 0;
     int wr = 0;
     if (!ap) {
-        fprintf(stderr, "Property '%s' not found for target %s\n", propertyName, arch->target);
+        // fprintf(stderr, "Property '%s' not found for target %s\n", propertyName, arch->target);
         return 0;
     }
     if (ap->valueType != APVT_ArrayOfStrings) {
         fprintf(stderr, "Property '%s' is not an array of strings for target %s\n", propertyName, arch->target);
-        return 0;
+        return -1;
     }
 
     while(ap->value.as_arrayOfStrings[i][0]) {
         wr += snprintf(&bufOut[wr], bufSize-wr, "%s%s ", prefix, ap->value.as_arrayOfStrings[i]);
         if (wr >= bufSize) {
             fprintf(stderr, "Cmd line too large expanding param '%s' for target %s\n", propertyName, arch->target);
-            return 0;
+            return -1;
         }
         ++i;
     }
@@ -454,7 +499,14 @@ int printCompositeFlagsProperties(struct Architecture *arch,
             return 0;
         }
     }
-    puts(toPrint);
+    // Now the toPrint string should always have a space at the end, remove it
+    // (this is needed so we can use the dump-all.sh script to compare the results
+    // with the javascript version)
+    wr = strlen(toPrint)-1;
+    while(isspace(toPrint[wr])) {
+        toPrint[wr--] = '\0';
+    }
+    puts(unescapeString(toPrint));
     return 1;
 }
 
@@ -820,18 +872,32 @@ int readPlatformFile(const char *filePath, struct SimpleList *archDef) {
         if (rsm == RSM_ARCH) {
             // Exit ARCH after we detect the '})\n' pattern
             if (!strncmp(trimLine, "})\n", 3)) {
-                int skipArch = 0;
-                // Filter the architectures that need to be skipped:
+
+                // Filter out the architectures that need to be skipped:
                 //  - $HIDDEN=true
                 //  - All windows targets
-                // Is this architecture hidden?
+                //  - All the iOS targets
+                // In general remove all the architectures that don't define 
+                // the macros for the toolset (C_COMPILER, C_LINKER, ...)
+                int skipArch = 0;
                 struct ArchParameter * hidden = archGetParam(currentArch, "$HIDDEN");
                 if (hidden && ((hidden->valueType == APVT_Boolean) && hidden->value.as_bool)) {
                     skipArch = 1;
                 }
-                if (!strncmp(currentArch->target, "i86Win32", 8) || !strncmp(currentArch->target, "x64Win64", 8)) {
+#if 1
+                if (!archGetParam(currentArch, "$C_COMPILER") ||
+                        !archGetParam(currentArch, "$C_LINKER") ||
+                        !archGetParam(currentArch, "$CXX_COMPILER") ||
+                        !archGetParam(currentArch, "$CXX_LINKER")) {
                     skipArch = 1;
                 }
+#else
+                if ((strstr(currentArch->target, "Win") != NULL) || 
+                    (strstr(currentArch->target, "INtime6") != NULL) ||
+                    (strstr(currentArch->target, "iOS") != NULL)) {
+                    skipArch = 1;
+                }
+#endif
 
                 if (skipArch) {
                     // Drop skipped architectures
@@ -1167,6 +1233,12 @@ int main(int argc, char **argv) {
             goto done;
         }
 
+    } else if (!strcmp(argOp, "--cxxlink")) {
+        if (!printStringProperty(archTarget, "$CXX_LINKER", argNoExpand, 0)) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
     } else if (!strcmp(argOp, "--cflags")) {
         const char *FLAGS[] = {
             "$C_COMPILER_FLAGS",
@@ -1217,6 +1289,7 @@ int main(int argc, char **argv) {
         const char *FLAGS[] = {
             nddsCLibs,
             "$SYSLIBS",
+            "$C_SYSLIBS",
             NULL
         };
         if (!printCompositeFlagsProperties(archTarget, FLAGS, argNoExpand)) {
@@ -1228,6 +1301,7 @@ int main(int argc, char **argv) {
         const char *FLAGS[] = {
             nddsCPPLibs,
             "$SYSLIBS",
+            "$CXX_SYSLIBS",
             NULL
         };
         if (!printCompositeFlagsProperties(archTarget, FLAGS, argNoExpand)) {
