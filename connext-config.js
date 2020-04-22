@@ -56,7 +56,7 @@ const $OS = {};
 });
 
 const $PLATFORM = {};
-["i86", "armv7a", "x64", "ppc", "mips64"].forEach( k => {
+["i86", "armv7", "armv7a", "x64", "ppc", "mips64"].forEach( k => {
     $PLATFORM[k] = k;
 });
 
@@ -139,10 +139,12 @@ to output a list of supported architectures
 // })
 //
 function processArch(os, comp, def) {
+    /*
     if (os == "i86Win32" || os == "x64Win64") {
         // Skip all windows targets...
         return;
     }
+    */
     let targetArch = `${os}${comp}`;
     let obj = {};
     Object.keys(def).forEach( key => {
@@ -185,18 +187,23 @@ function processArch(os, comp, def) {
         }
         obj[goodKey] = val;
     })
-    if (obj['HIDDEN'] === true) {
-        // Skip hidden architectures
+    // Skip all the hidden architectures and architectures that don't define the toochain
+    if ((obj['HIDDEN'] === true) || !obj['C_COMPILER'] || !obj['C_LINKER'] || !obj['CXX_COMPILER'] | !obj['CXX_LINKER']) {
+        // console.error(`Skipping arch ${targetArch}`);
         return;
     }
     // Else, append this arch
     theArchDef[targetArch] = obj;
+
 }
 
 // }}}
 // {{{ expandEnvVar
 // -----------------------------------------------------------------------------
 function expandEnvVar(str) {
+    if (!str) {
+        return "";
+    }
     return (argNoExpand) ? str : (str.replace(/\$\(([^)]+)\)/g, (_,n) => process.env[n]===undefined?"":process.env[n]) );
 }
 
@@ -414,7 +421,7 @@ switch(argOp) {
         break;
 
     case "--platform":
-        console.log(expandEnvVar(targetDef.PLATFORMS));
+        console.log(expandEnvVar(targetDef.PLATFORM));
         break;
 
     default:
