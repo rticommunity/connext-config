@@ -535,34 +535,59 @@ int printStringProperty(struct Architecture *arch,
 }
 
 /* }}} */
-// {{{ writeStringArrayProperties
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Find a property 'propertyName' in the given architecture.
-// - Ensure the property exist
-// - Ensure the property is an array of string
-// - Unwrap the array (join) all the strings using a space as separator
-// - Optionally put a prefix string before each string value
-//
-// Note: the returned string is terminated with a space (so you can concatenate calls)
-// Returns the number of characters written or -1 if an error occurred.
-// Returns 0 if the array is empty.
-int writeStringArrayProperties(struct Architecture *arch, char *bufOut, int bufSize, const char *propertyName, const char *prefix) {
-    struct ArchParameter *ap = archGetParam(arch, propertyName);
+/* {{{ joinStringArrayProperties
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Find a property 'propertyName' in the given architecture, then:
+ * - Ensure the property exist
+ * - Ensure the property is an array of string
+ * - Unwrap the array (join) all the strings using a space as separator and
+ *   a given prefix to be prepended before each string
+ *
+ * Note: the returned string is terminated with a space (so you can concatenate calls)
+ *
+ * Note: the prefix is required, use "" (empty string) if you don't want to
+ *       have a prefix.
+ *
+ * \param arch      a pointer to the architecture where to look for the
+ *                  given property
+ * \param bufOut    a pointer to the string buffer where to write the result
+ * \param bufSize   the maximum number of characters to write
+ * \param propName  the name of the property to look in the key-value pairs
+ * \param prefix    the string to be prepended to each array element
+ * \return          the number of characters written or -1 if an error occurred
+ *                  Returns 0 if the array is empty or the property is not 
+ *                  defined.
+ */
+static int joinStringArrayProperties(struct Architecture *arch, 
+        char *bufOut,
+        int bufSize,
+        const char *propName,
+        const char *prefix) {
+    struct ArchParameter *ap = archGetParam(arch, propName);
     int i = 0;
     int wr = 0;
-    if (!ap) {
-        // fprintf(stderr, "Property '%s' not found for target %s\n", propertyName, arch->target);
+    if (ap == NULL) {
         return 0;
     }
     if (ap->valueType != APVT_ArrayOfStrings) {
-        fprintf(stderr, "Property '%s' is not an array of strings for target %s\n", propertyName, arch->target);
+        fprintf(stderr, 
+                "Property '%s' is not an array of strings for target %s\n", 
+                propName, 
+                arch->target);
         return -1;
     }
 
     while(ap->value.as_arrayOfStrings[i][0]) {
-        wr += snprintf(&bufOut[wr], bufSize-wr, "%s%s ", prefix, ap->value.as_arrayOfStrings[i]);
+        wr += snprintf(&bufOut[wr], 
+                bufSize-wr, 
+                "%s%s ", 
+                prefix, 
+                ap->value.as_arrayOfStrings[i]);
         if (wr >= bufSize) {
-            fprintf(stderr, "Cmd line too large expanding param '%s' for target %s\n", propertyName, arch->target);
+            fprintf(stderr, 
+                    "Cmd line too large expanding param '%s' for target %s\n", 
+                    propName, 
+                    arch->target);
             return -1;
         }
         ++i;
@@ -571,7 +596,7 @@ int writeStringArrayProperties(struct Architecture *arch, char *bufOut, int bufS
     return wr;
 }
 
-// }}}
+/* }}} */
 /* {{{ printCompositeFlagsProperties
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * Given an architecture, prints the flags composed by getting the values of 
@@ -594,7 +619,7 @@ int printCompositeFlagsProperties(struct Architecture *arch,
     char line[MAX_CMDLINEARG_SIZE];
     int wr = 0;
     int rc = 0;
-    int propIdx = 0;
+    int propIdx;
     char *toPrint;
     const char *prefix;
 
@@ -610,7 +635,7 @@ int printCompositeFlagsProperties(struct Architecture *arch,
              * by '-I', all the other flags need to be prefixed by a "-"
              */
             prefix = (!strcmp(propName, "$INCLUDES")) ? "-I" : "-";
-            rc = writeStringArrayProperties(arch, 
+            rc = joinStringArrayProperties(arch, 
                     &line[wr], 
                     MAX_CMDLINEARG_SIZE-wr, 
                     propName, 
@@ -652,27 +677,57 @@ int printCompositeFlagsProperties(struct Architecture *arch,
 }
 
 /* }}} */
-// {{{ parseStringInQuotes
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Given a char * identifying a string in quotes, extracts the content
-// of the string.
-// line points to a string containing a string in quotes. For example
-//  line = ..."abc"...
-// Copies the 'abc' into the bufOut, ensuring the max length of the
-// string does not exceed bufOutLen
-// Returns the pointer to the end quote (inside the original line) 
-// if success, or NULL if an error occurred.
-// In case of error *ptrErr contains the error message.
-char * parseStringInQuotes(char *line, char *bufOut, int bufOutLen, const char **errOut) {
-    char endl = '"';
+/* {{{ parseStringInQuotes
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Given a char * identifying a string included in single or double quotes, 
+ * extracts the content of the string.
+ *
+ * For example, if line = abc "def"zzz
+ * then this function will search for the first quite (after "abc ") then
+ * copy the string "def" inside bufOut (without the quotes).
+ *
+ * The copy operation ensures the max length of the bufOut does not exceed
+ * the value given in bufOutLen.
+ *
+ * \param line      pointer to a string containing a string in quotes.
+ * \param bufOut    pointer to the string where to write the content
+ * \param bufOutLen max length of bufOut
+ * \param errOut    A pointer to a constant string containing an error
+ *                  message (to be used only if an error occurred).
+ * \return          the pointer to the end quote (inside the original line) 
+ *                  if success, or NULL if an error occurred.
+ *                  In case of error *ptrErr contains the error message.
+ */
+char * parseStringInQuotes(char *line,
+        char *bufOut,
+        int bufOutLen,
+        const char **errOut) {
+    char endl = '"';        /* the char to identify the end of the string */
     char *tmp2;
     char *tmp1 = line;
+
+    /* Scans the input line until we identify a single or double quote 
+     * NOTE: the following code is NOT the same thing as performing
+     * two strchr like this:
+     *      tmp1 = strchr(line, '"')
+     *      if (!tmp1) {
+     *          tmp1 = strchr(line, '\'');
+     *      }
+     * because the above code will fail to correctly interpret
+     * a string like this:
+     *      'MyValue=\"hello\"'
+     * (the first strchr will identify the double quote).
+     */
     while (*tmp1) {
         if (*tmp1 == '"') {
             break;
         }
         if (*tmp1 == '\'') {
-            endl='\'';
+            /* 
+             * If we identify a string in single quote, look for the end
+             * by searching the next single quote
+             */
+            endl='\''; 
             break;
         }
         ++tmp1;
@@ -699,8 +754,8 @@ char * parseStringInQuotes(char *line, char *bufOut, int bufOutLen, const char *
     return tmp2;;
 }
 
-// }}}
-//
+/* }}} */
+
 // {{{ processArchDefinitionLine
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Returns 0 if failed, 1 if success
