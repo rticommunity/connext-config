@@ -1350,14 +1350,14 @@ int main(int argc, char **argv) {
         /* Do not expand variables */
         if (argShell) {
             // Use shell style
-            strncpy(nddsFlags, "-I${NDDSHOME}/include -I${NDDSHOME}/include/ndds", MAX_CMDLINEARG_SIZE);;
-            strncpy(nddsCLibs, "-L${NDDSHOME}/lib/${argTarget} -lnddsc${libSuffix} -lnddscore${libSuffix}", MAX_CMDLINEARG_SIZE);
-            strncpy(nddsCPPLibs, "-L${NDDSHOME}/lib/${argTarget} -lnddscpp${libSuffix} -lnddsc${libSuffix} -lnddscore${libSuffix}", MAX_CMDLINEARG_SIZE);
+            snprintf(nddsFlags, MAX_CMDLINEARG_SIZE, "-I${NDDSHOME}/include -I${NDDSHOME}/include/ndds");;
+            snprintf(nddsCLibs, MAX_CMDLINEARG_SIZE, "-L${NDDSHOME}/lib/%s -lnddsc%s -lnddscore%s", argTarget, libSuffix, libSuffix);
+            snprintf(nddsCPPLibs, MAX_CMDLINEARG_SIZE, "-L${NDDSHOME}/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s", argTarget, libSuffix, libSuffix, libSuffix);
         } else {
             // Use makefile style
-            strncpy(nddsFlags, "-I$(NDDSHOME)/include -I$(NDDSHOME)/include/ndds", MAX_CMDLINEARG_SIZE);
-            strncpy(nddsCLibs, "-L$(NDDSHOME)/lib/${argTarget} -lnddsc${libSuffix} -lnddscore${libSuffix}", MAX_CMDLINEARG_SIZE);
-            strncpy(nddsCPPLibs, "-L$(NDDSHOME)/lib/${argTarget} -lnddscpp${libSuffix} -lnddsc${libSuffix} -lnddscore${libSuffix}", MAX_CMDLINEARG_SIZE);
+            snprintf(nddsFlags, MAX_CMDLINEARG_SIZE, "-I$(NDDSHOME)/include -I$(NDDSHOME)/include/ndds");
+            snprintf(nddsCLibs, MAX_CMDLINEARG_SIZE, "-L$(NDDSHOME)/lib/%s -lnddsc%s -lnddscore%s", argTarget, libSuffix, libSuffix);
+            snprintf(nddsCPPLibs, MAX_CMDLINEARG_SIZE, "-L$(NDDSHOME)/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s", argTarget, libSuffix, libSuffix, libSuffix);
         }
     } 
 
