@@ -4,10 +4,36 @@
  * Subject to Eclipse Public License v1.0; see LICENSE.md for details.       *
  *****************************************************************************/
 
-/* This tool parses the rtiddsgen master project file:
+/*
+ * ---------------------------------------------------------------------------
+ * This tool parses the rtiddsgen master project file:
  *      $NDDSHOME/resource/app/app_support/rtiddsgen/templates/projectfiles/platforms.vm
  * extracts the definition of project files (compilers, flags, linker, 
  * libs...), parses it and made it available through command line requests.
+ *
+ *
+ * ---------------------------------------------------------------------------
+ * This source file contains embedded fold tags around function declarations
+ * to be interpreted by vim.
+ * See sections containing {{{...}}}
+ * If you change any code, please make sure those tags are maintained!
+ *
+ * To enable folding, enter:
+ *  :set foldmethod=marker
+ * Note that modelines are disabled by default on all the major Linux
+ * distributions, so settings cannot be embedded in this file.
+ * ---------------------------------------------------------------------------
+ *
+ * TODO / ISSUES:
+ *  - if --noexpand and --shell is used, the env variables should all have 
+ *    the form ${FOO}, but if the variable comes from the platform file,
+ *    it retains the form $(FOO), getting mixed output.
+ *    For example: 
+ *      ./src/connext-config --noexpand --shell --cflags armv7aAndroid2.3gcc4.8
+ *    produces the following output:
+ *      -Wall -I$(ANDROID_NDK_PATH)/platforms/... -I${NDDSHOME}/include/ndds
+ *               ^^^^^^^^^^^^^^^^^^
+ *               Here we need to replace to ${...}
  */
 
 
@@ -76,6 +102,8 @@ typedef enum {
  *  - Array of strings (each string has MAX_STRING_SIZE max length, and
  *    the array has up to MAX_ARRAY_SIZE values)
  *  - Env variables using the form $FOO.bar
+ *
+ * An ArchParameter object is a node of the list stored in the ArchParameter
  */
 typedef enum {
     APVT_Invalid = 0,
@@ -89,15 +117,25 @@ struct ArchParameter {
     struct SimpleListNode   parent;
     char                    key[MAX_STRING_SIZE];
     union {
+        /* 
+         * Value is represented as a single string 
+         * (APVT_String or APVT_EnvVariable) 
+         */
         char as_string[MAX_STRING_SIZE];
+
+        /* Value is represented as an array of strings */
         char as_arrayOfStrings[MAX_ARRAY_SIZE][MAX_STRING_SIZE];
+
+        /* Value is a boolean */
         int as_bool;
     } value;
     ArchParamValueType valueType;
 };
 
-// {{{ ArchParameter_init
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/* {{{ ArchParameter_init
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * The initializer for the ArchParameter object
+ */
 void ArchParameter_init(struct ArchParameter *me) {
     SimpleListNode_init(&me->parent);
     memset(me->key, 0, sizeof(me->key));
@@ -105,9 +143,11 @@ void ArchParameter_init(struct ArchParameter *me) {
     me->valueType = APVT_Invalid;
 }
 
-// }}}
-// {{{ ArchParameter_new
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/* }}} */
+/* {{{ ArchParameter_new
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * The constructor for the ArchParameter object
+ */
 struct ArchParameter * ArchParameter_new() {
     struct ArchParameter *retVal = calloc(1, sizeof(*retVal));
     if (retVal == NULL) {
@@ -117,45 +157,65 @@ struct ArchParameter * ArchParameter_new() {
     return retVal;
 }
 
-// }}}
-// {{{ ArchParameter_finalize
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/* }}} */
+/* {{{ ArchParameter_finalize
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * The finalizer for the ArchParameter objec
+ */
 void ArchParameter_finalize(struct ArchParameter *me) {
     SimpleListNode_finalize(&me->parent);
 }
 
-// }}}
-// {{{ ArchParameter_delete
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/* }}} */
+/* {{{ ArchParameter_delete
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * The destructor for the ArchParameter object
+ */
 void ArchParameter_delete(struct ArchParameter *me) {
     ArchParameter_finalize(me);
     free(me);
 }
 
-// }}}
+/* }}} */
 
 
 /***************************************************************************
  * Architecture
  **************************************************************************/
+/* Defines the container of all the key-value pairs extracted from the
+ * project file that are associated to a particular target architecture.
+ *
+ * It essentially contains the name of the target and a linked list
+ * of ArchParameter objects.
+ *
+ * An Architecture is also a node of a linked list itself.
+ */
 struct Architecture {
     struct SimpleListNode   parent;
     char                    target[MAX_STRING_SIZE];
-    struct SimpleList       params;
+    struct SimpleList       paramList;
 };
 
-// {{{ Architecture_init
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/* {{{ Architecture_init
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Architecture initializer
+ */
 void Architecture_init(struct Architecture *me) {
     SimpleListNode_init(&me->parent);
     memset(me->target, 0, sizeof(me->target));
-    SimpleList_init(&me->params);
-    SimpleList_setNodeDestructor(&me->params, (SimpleListNodeDestructorFn)ArchParameter_delete);
+    SimpleList_init(&me->paramList);
+
+    /* Set the node destructor of the list of parameter so all the nodes
+     * will be properly released when this list is finalized
+     */
+    SimpleList_setNodeDestructor(&me->paramList, (SimpleListNodeDestructorFn)ArchParameter_delete);
 }
 
-// }}}
-// {{{ Architecture_new
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/* }}} */
+/* {{{ Architecture_new
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Architecture constructor
+ */
 struct Architecture * Architecture_new() {
     struct Architecture *retVal = calloc(1, sizeof(*retVal));
     if (retVal == NULL) {
@@ -165,50 +225,73 @@ struct Architecture * Architecture_new() {
     return retVal;
 }
 
-// }}}
-// {{{ Architecture_finalize
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/* }}} */
+/* {{{ Architecture_finalize
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Architecture finalizer
+ */
 void Architecture_finalize(struct Architecture *me) {
     SimpleListNode_finalize(&me->parent);
-    SimpleList_finalize(&me->params);
+    SimpleList_finalize(&me->paramList);
 }
 
-// }}}
-// {{{ Architecture_delete
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/* }}} */
+/* {{{ Architecture_delete
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Architecture destructor
+ */
 void Architecture_delete(struct Architecture *me) {
     Architecture_finalize(me);
     free(me);
 }
 
-// }}}
+/* }}} */
 
 
+/***************************************************************************
+ * Local Utility Functions
+ **************************************************************************/
+/* {{{ dumpArch
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Prints to stdout a dump of the list of architectures.
+ *
+ * This function is used when user specify --dump-all parameter and is meant
+ * for debugging/testing ony.
+ *
+ * \param list      The list of Architecture objects
+ *
+ */
+static void dumpArch(struct SimpleList *list) {
+    struct SimpleListNode *archNode = NULL;
 
-// {{{ dumpArch
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// For debugging purposes only
-void dumpArch(struct SimpleList *list) {
-    struct SimpleListNode *archNode;
-
-    for (archNode = SimpleList_getBegin(list); archNode; archNode = SimpleListNode_getNext(archNode)) {
+    for (archNode = SimpleList_getBegin(list); 
+            archNode; 
+            archNode = SimpleListNode_getNext(archNode)) {
         struct SimpleListNode *paramNode;
         struct Architecture *arch = (struct Architecture *)archNode;
         printf("arch='%s':\n", arch->target);
 
-        for (paramNode = SimpleList_getBegin(&arch->params); paramNode; paramNode = SimpleListNode_getNext(paramNode)) {
+        for (paramNode = SimpleList_getBegin(&arch->paramList); 
+                paramNode; 
+                paramNode = SimpleListNode_getNext(paramNode)) {
             struct ArchParameter *param = (struct ArchParameter *)paramNode;
             switch(param->valueType) {
                 case APVT_Boolean:
-                    printf("\t\t%s=%s\n", param->key, (param->value.as_bool ? "TRUE" : "FALSE"));
+                    printf("\t\t%s=%s\n",
+                            param->key,
+                            (param->value.as_bool ? "TRUE" : "FALSE"));
                     break;
 
                 case APVT_String:
-                    printf("\t\t%s=\"%s\"\n", param->key, param->value.as_string);
+                    printf("\t\t%s=\"%s\"\n",
+                            param->key,
+                            param->value.as_string);
                     break;
 
                 case APVT_EnvVariable:
-                    printf("\t\t%s=%s\n", param->key, param->value.as_string);
+                    printf("\t\t%s=%s\n",
+                            param->key,
+                            param->value.as_string);
                     break;
 
                 case APVT_ArrayOfStrings: {
@@ -219,7 +302,9 @@ void dumpArch(struct SimpleList *list) {
                         if (param->value.as_arrayOfStrings[i][0] == '\0') {
                             break;
                         }
-                        printf("%s\"%s\"", sep, param->value.as_arrayOfStrings[i]);
+                        printf("%s\"%s\"",
+                                sep,
+                                param->value.as_arrayOfStrings[i]);
                         sep = ", ";
                     }
                     printf("]\n");
@@ -230,13 +315,22 @@ void dumpArch(struct SimpleList *list) {
     }
 }
 
-// }}}
-
-// {{{ archGetParam
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-struct ArchParameter * archGetParam(struct Architecture *arch, const char *key) {
+/* }}} */
+/* {{{ archGetParam
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Search the list of key-value pairs inside an Architecture object for the 
+ * requested key.
+ *
+ * \param arch      The list of Architectures
+ * \param key       The key to search
+ * \return          A pointer to ArchParameter object if found or NULL if the
+ *                  requested key is not found
+ */
+static struct ArchParameter * archGetParam(struct Architecture *arch, const char *key) {
     struct SimpleListNode *paramNode;
-    for (paramNode = SimpleList_getBegin(&arch->params); paramNode; paramNode = SimpleListNode_getNext(paramNode)) {
+    for (paramNode = SimpleList_getBegin(&arch->paramList);
+            paramNode;
+            paramNode = SimpleListNode_getNext(paramNode)) {
         struct ArchParameter *param = (struct ArchParameter *)paramNode;
         if (!strcmp(param->key, key)) {
             return param;
@@ -245,13 +339,22 @@ struct ArchParameter * archGetParam(struct Architecture *arch, const char *key) 
     return NULL;
 }
 
-// }}}
-// {{{ unescapeString
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Given a string (potentially) containing escaped characters like \n, \",...
-// returns a static string of original values with the escaped characters
-// unescaped.
-char * unescapeString(char *in) {
+/* }}} */
+/* {{{ unescapeString
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Given a string (potentially) containing escaped characters like \n, \",...
+ * returns a static string of original values with the escaped characters
+ * unescaped.
+ *
+ * Warning: This function is NON REENTRANT
+ *
+ * Warning: The maximum length of the string processed is MAX_CMDLINEARG_SIZE
+ *
+ * \param in        The input string to unescape
+ * \return          A pointer to a static string containing the unescaped 
+ *                  string.
+ */
+static char * unescapeString(char *in) {
     static char retVal[MAX_CMDLINEARG_SIZE];
     size_t rd = 0, wr = 0;
     size_t len = strlen(in);
@@ -259,9 +362,15 @@ char * unescapeString(char *in) {
 
     memset(retVal, 0, MAX_CMDLINEARG_SIZE);
 
+    /* 
+     * Input string has at least 1 char: means there is the potential
+     * for an escape character.
+     */
     if (len > 1) {
-        // Stop at the second to the last char
-        for (rd=0, wr=0, --len; rd < len; ++rd,++wr) {
+        /* Stop at the second to the last char */
+        for (rd=0, wr=0, --len; 
+                rd < len; 
+                ++rd,++wr) {
             ch = in[rd];
             if (ch == '\\') {
                 switch(in[++rd]) {
@@ -277,8 +386,8 @@ char * unescapeString(char *in) {
                     case '\\':  ch = '\\'; break;
                     case '\?':  ch = '\?'; break;
                     default:
+                        /* Unknown escape sequence, leave it 'as is' */
                         --rd;
-
                 }
             }
             retVal[wr] = ch;
@@ -290,13 +399,13 @@ char * unescapeString(char *in) {
     return &retVal[0];
 }
 
-// }}}
-
-// {{{ arrayFind
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Given a NULL-terminated array of strings, find the position of the matching string
-// Returns -1 if not found.
-int arrayFind(const char **arr, const char *val) {
+/* }}} */
+/* {{{ arrayFind
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Given a NULL-terminated array of strings, find the position of the matching string
+ * Returns -1 if not found.
+ */
+static int arrayFind(const char **arr, const char *val) {
     int i = 0;
     while (arr[i]) {
         if (!strcmp(arr[i], val)) {
@@ -307,97 +416,105 @@ int arrayFind(const char **arr, const char *val) {
     return -1;
 }
 
-// }}}
-// {{{ expandEnvVar
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Expands all the env variables from the inStr
-// Function is NON REENTRANT, pointer returned is a static char *
-char * expandEnvVar(const char *inStr) {
+/* }}} */
+/* {{{ expandEnvVar
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Expands all the env variables from the inStr
+ * Function is NON REENTRANT, pointer returned is a static char *
+ *
+ * An environment variable in the inStr is represented as $(VARIABLE).
+ * (parentheses are required).
+ *
+ * The maximum length of the expanded string is MAX_CMDLINEARG_SIZE
+ * The maximum length of an environment variable is MAX_STRING_SIZE
+ *
+ * If an env variable is not defined, no errors are reported (the 
+ * whole variable is expanded with an empty string).
+ *
+ * \param inStr     the input string
+ * \return          a pointer to a static string buffer containing the result
+ *                  of the expansion or NULL if an error occurred.
+ */
+static char * expandEnvVar(const char *inStr) {
     static char retVal[MAX_CMDLINEARG_SIZE];
     char varName[MAX_STRING_SIZE];
-    int wr = 0;     // write pos
-    int rd = 0;     // read pos
+    size_t wr = 0;     // write pos
+    size_t rd;         // read pos
 
     memset(retVal, 0, sizeof(retVal));
-    memset(varName, 0, sizeof(varName));
 
-    while(inStr[rd]) {
+    for(rd = 0; inStr[rd] != '\0'; ++rd) {
         if ((inStr[rd] == '$') && inStr[rd+1]=='(') {
-            int i = 0;
-            char *varValue;
-            rd += 2;
-            while(inStr[rd] != ')') {
-                if (!inStr[rd]) {
-                    fprintf(stderr, "Cannot find end of env variable in string: '%s'\n", inStr);
+            /* Found the beginning of an nev variable, extract the name */
+            size_t i = 0;
+            char *varValue = NULL;
+            size_t varValueLen;
+
+            memset(varName, 0, sizeof(varName));
+            rd += 2;        /* Skip '$(' */
+            while(inStr[rd] != ')') {    /* Read var name until ')' */
+                if (inStr[rd] == '\0') {
+                    fprintf(stderr, 
+                            "Cannot find end of env variable in string: '%s'\n", 
+                            inStr);
+                    return NULL;
+                }
+                if (i == MAX_STRING_SIZE-1) {
+                    fprintf(stderr, 
+                            "Env variable name too large in input string: '%s'\n", 
+                            inStr);
                     return NULL;
                 }
                 varName[i++] = inStr[rd++];
             }
             varValue = getenv(varName);
-            if (varValue) {
-                for (i = 0; varValue[i]; ++i) {
-                    retVal[wr++] = varValue[i];
+            if (varValue != NULL) {
+                varValueLen = strlen(varValue);
+                if (varValueLen + wr >= MAX_CMDLINEARG_SIZE-1) {
+                    fprintf(stderr, 
+                            "Expanded string too large when processing env variable '%s'", 
+                            varName);
+                    return NULL;
                 }
+
+                memcpy(&retVal[wr], varValue, varValueLen);
+                wr += varValueLen;
             }
-        } else {
-            retVal[wr++] = inStr[rd];
-        }
-        ++rd;
+            continue;
+        } 
+
+        /* Else copy the character */
+        retVal[wr++] = inStr[rd];
     }
     return retVal;
 }
 
-// }}}
-// {{{ joinArrayOfStrings
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Given a NULL-terminated array of strings, join all the strings together using
-// the given prefix and separator string
-// Returns a pointer to a static string, or NULL if the composed string exceed MAX_CMDLINEARG_SIZE
-// This function is NON-REENTRANT.
-char * joinArrayOfStrings(const char **arr, const char *prefix, const char *sep) {
-    static char retVal[MAX_CMDLINEARG_SIZE];
-    size_t i = 0;
-    size_t wr = 0;
-    memset(retVal, 0, sizeof(retVal));
-
-    while(arr[i]) {
-        if (arr[i+1] == NULL) {
-            sep = "";
-        }
-        wr += snprintf(&retVal[wr], MAX_CMDLINEARG_SIZE-wr, "%s%s%s", prefix, arr[i], sep);
-        if (wr >= MAX_CMDLINEARG_SIZE) {
-            fprintf(stderr, "Cmd line composition too long");
-            return NULL;
-        }
-    }
-    return &retVal[0];
-}
-
-// }}}
-// {{{ printStringProperty
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Prints to stdout the given string property for the given architecture, optionally
-// expanding the environment variables
-// If optional == 0, if the variable is not defined, it will print an error
-// If optional == 1, no erros are reportd (and nothing is printed) if the
-// variable is not defined.
-//
-// Returns 1 if success, 0 if failed
-int printStringProperty(struct Architecture *arch, const char *propertyName, int noExpand, int optional) {
-    struct ArchParameter *ap = archGetParam(arch, propertyName);
+/* }}} */
+/* {{{ printStringProperty
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Prints to stdout the value of the given string property for the 
+ * specified architecture, optionally expanding the environment variables.
+ *
+ * \param arch      a pointer to the Architecture object
+ * \param propName  the name of the property to lookup
+ * \param expandVar the boolean that tells whether to expand the env 
+ *                  variables or not.
+ * \return          1 if success, 0 if failed
+ */
+int printStringProperty(struct Architecture *arch,
+        const char *propName,
+        int expandVar) {
     char *toPrint;
-    if (!ap) {
-        if (optional) {
-            return 1;
-        }
-        fprintf(stderr, "Property '%s' not found for target %s\n", propertyName, arch->target);
-        return 0;
+    struct ArchParameter *ap = archGetParam(arch, propName);
+    if (ap == NULL) {
+        /* Variable not defined */
+        return 1;
     }
     if (ap->valueType == APVT_String) {
         toPrint = &ap->value.as_string[0];
-        if (!noExpand) {
+        if (expandVar) {
             toPrint = expandEnvVar(toPrint);
-            if (!toPrint) {
+            if (toPrint == NULL) {
                 // Error message has been already printed in expandEnvVar
                 return 0;
             }
@@ -407,14 +524,17 @@ int printStringProperty(struct Architecture *arch, const char *propertyName, int
         toPrint = &ap->value.as_string[0];
 
     } else {
-        fprintf(stderr, "Property '%s' is not a string or env variable for target %s\n", propertyName, arch->target);
+        fprintf(stderr, 
+                "Property '%s' is not a string or env variable for target %s\n", 
+                propName, 
+                arch->target);
         return 0;
     }
     puts(toPrint);
     return 1;
 }
 
-// }}}
+/* }}} */
 // {{{ writeStringArrayProperties
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Find a property 'propertyName' in the given architecture.
@@ -464,13 +584,13 @@ int writeStringArrayProperties(struct Architecture *arch, char *bufOut, int bufS
  *      from the architecture.
  *      Each property value is expected to be an array of strings identifying
  *      the flags. Each flag is prefixed with a "-" (or "-I" for $INCLUDES)
- * noExpand is a boolean that tells whether to expand environment variables (0)
- *      or not (1).
+ * expandVar is a boolean that tells whether to expand environment variables (1)
+ *      or not (0).
  * Returns 0 if an error occurred, or 1 if success
  */
 int printCompositeFlagsProperties(struct Architecture *arch, 
         const char **props, 
-        int noExpand) {
+        int expandVar) {
     char line[MAX_CMDLINEARG_SIZE];
     int wr = 0;
     int rc = 0;
@@ -514,7 +634,7 @@ int printCompositeFlagsProperties(struct Architecture *arch,
     }
     
     toPrint = &line[0];
-    if (!noExpand) {
+    if (expandVar) {
         toPrint = expandEnvVar(toPrint);
         if (toPrint == NULL) {
             return 0;
@@ -850,11 +970,11 @@ int readPlatformFile(const char *filePath, struct SimpleList *archDef) {
                 assert(currentArch == NULL);
 
                 currentArch = Architecture_new();
-                if (!currentArch) {
+                if (currentArch == NULL) {
                     fprintf(stderr, "Out of memory allocating currentArch\n");
                     goto done;
                 }
-                if (!processArchDefinitionLine(trimLine, &target[0], &compiler[0])) {
+                if (processArchDefinitionLine(trimLine, &target[0], &compiler[0]) == FL_FALSE) {
                     goto done;
                 }
                 if (strlen(target) + strlen(compiler) > MAX_STRING_SIZE) {
@@ -944,7 +1064,7 @@ int readPlatformFile(const char *filePath, struct SimpleList *archDef) {
                 goto done;
             }
             // Got a valid line:
-            SimpleList_addToEnd(&currentArch->params, &currentParam->parent);
+            SimpleList_addToEnd(&currentArch->paramList, &currentParam->parent);
             currentParam = NULL;
             continue;
         }
@@ -1019,7 +1139,7 @@ int main(int argc, char **argv) {
     int argStatic = 0;
     int argDebug = 0;
     int argShell = 0;
-    int argNoExpand = 0;
+    int argExpandEnvVar = 1;
     char *tmp;
     char *NDDSHOME = NULL;
     char *platformFile = NULL;
@@ -1078,7 +1198,7 @@ int main(int argc, char **argv) {
                 continue;
             }
             if (!strcmp(argv[i], "--noexpand")) {
-                argNoExpand = 1;
+                argExpandEnvVar = 0;
                 continue;
             }
             if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
@@ -1221,7 +1341,13 @@ int main(int argc, char **argv) {
         goto done;
     }
 
-    if (argNoExpand) {
+    if (argExpandEnvVar) {
+        /* Expand NDDSHOME */
+        snprintf(nddsFlags, MAX_CMDLINEARG_SIZE, "-I%s/include -I%s/include/ndds", NDDSHOME, NDDSHOME);
+        snprintf(nddsCLibs, MAX_CMDLINEARG_SIZE, "-L%s/lib/%s -lnddsc%s -lnddscore%s", NDDSHOME, argTarget, libSuffix, libSuffix);
+        snprintf(nddsCPPLibs, MAX_CMDLINEARG_SIZE, "-L%s/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s", NDDSHOME, argTarget, libSuffix, libSuffix, libSuffix);
+    } else {
+        /* Do not expand variables */
         if (argShell) {
             // Use shell style
             strncpy(nddsFlags, "-I${NDDSHOME}/include -I${NDDSHOME}/include/ndds", MAX_CMDLINEARG_SIZE);;
@@ -1233,35 +1359,30 @@ int main(int argc, char **argv) {
             strncpy(nddsCLibs, "-L$(NDDSHOME)/lib/${argTarget} -lnddsc${libSuffix} -lnddscore${libSuffix}", MAX_CMDLINEARG_SIZE);
             strncpy(nddsCPPLibs, "-L$(NDDSHOME)/lib/${argTarget} -lnddscpp${libSuffix} -lnddsc${libSuffix} -lnddscore${libSuffix}", MAX_CMDLINEARG_SIZE);
         }
-
-    } else {
-        snprintf(nddsFlags, MAX_CMDLINEARG_SIZE, "-I%s/include -I%s/include/ndds", NDDSHOME, NDDSHOME);
-        snprintf(nddsCLibs, MAX_CMDLINEARG_SIZE, "-L%s/lib/%s -lnddsc%s -lnddscore%s", NDDSHOME, argTarget, libSuffix, libSuffix);
-        snprintf(nddsCPPLibs, MAX_CMDLINEARG_SIZE, "-L%s/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s", NDDSHOME, argTarget, libSuffix, libSuffix, libSuffix);
-    }
+    } 
 
     // Process request operation
     retCode = APPLICATION_EXIT_SUCCESS;
     if (!strcmp(argOp, "--ccomp")) {
-        if (!printStringProperty(archTarget, "$C_COMPILER", argNoExpand, 0)) {
+        if (!printStringProperty(archTarget, "$C_COMPILER", argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
     } else if (!strcmp(argOp, "--clink")) {
-        if (!printStringProperty(archTarget, "$C_LINKER", argNoExpand, 0)) {
+        if (!printStringProperty(archTarget, "$C_LINKER", argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
     } else if (!strcmp(argOp, "--cxxcomp")) {
-        if (!printStringProperty(archTarget, "$CXX_COMPILER", argNoExpand, 0)) {
+        if (!printStringProperty(archTarget, "$CXX_COMPILER", argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
     } else if (!strcmp(argOp, "--cxxlink")) {
-        if (!printStringProperty(archTarget, "$CXX_LINKER", argNoExpand, 0)) {
+        if (!printStringProperty(archTarget, "$CXX_LINKER", argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1274,7 +1395,7 @@ int main(int argc, char **argv) {
             nddsFlags,
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argNoExpand)) {
+        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1287,7 +1408,7 @@ int main(int argc, char **argv) {
             nddsFlags,
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argNoExpand)) {
+        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1297,7 +1418,7 @@ int main(int argc, char **argv) {
             "$C_LINKER_FLAGS",
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argNoExpand)) {
+        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1307,7 +1428,7 @@ int main(int argc, char **argv) {
             "$CXX_LINKER_FLAGS",
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argNoExpand)) {
+        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1319,7 +1440,7 @@ int main(int argc, char **argv) {
             "$C_SYSLIBS",
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argNoExpand)) {
+        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1331,19 +1452,19 @@ int main(int argc, char **argv) {
             "$CXX_SYSLIBS",
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argNoExpand)) {
+        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
     } else if (!strcmp(argOp, "--os")) {
-        if (!printStringProperty(archTarget, "$OS", argNoExpand, 1)) {
+        if (!printStringProperty(archTarget, "$OS", argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
     } else if (!strcmp(argOp, "--platform")) {
-        if (!printStringProperty(archTarget, "$PLATFORM", argNoExpand, 1)) {
+        if (!printStringProperty(archTarget, "$PLATFORM", argExpandEnvVar)) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
