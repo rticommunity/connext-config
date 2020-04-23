@@ -34,28 +34,49 @@
 #define APPLICATION_EXIT_FAILURE                3
 #define APPLICATION_EXIT_UNKNOWN                4
 
+/* NULL-terminated array of valid <what> commands */
 const char * VALID_WHAT[] = {
-    "--list-all",
     "--ccomp", "--clink", "--cxxcomp", "--cxxlink", "--cflags", "--cxxflags",
     "--ldflags", "--ldxxflags", "--ldlibs", "--ldxxlibs",
     "--os", "--platform",
     NULL
 };
 
+/* State machine used when parsing the project file */
 typedef enum {
-    RSM_TOPLEVEL,
-    RSM_MACRO,
-    RSM_ARCH
+    RSM_TOPLEVEL,           /* Parsing top level of the file */
+    RSM_MACRO,              /* Parsing inside a #macro */
+    RSM_ARCH                /* Parsing inside an #arch section */
 } ReadStateMachine;
 
-#define MAX_STRING_SIZE     200         // Max length of an arch, key or string value
-#define MAX_ARRAY_SIZE      20          // Max number of key-value pairs entries in an architecture
-#define MAX_CMDLINEARG_SIZE 1000        // Max length of a command line argument
+/***************************************************************************
+ * Application Limits:
+ * The following limits are used when allocating static buffers
+ **************************************************************************/
+/* Max length of a string token inside the parsed architecture list.
+ * This value determines the max size of keys, single-string values, 
+ * values of arrays, and architecture names
+ */
+#define MAX_STRING_SIZE     200
+
+/* The maximum number of key-value pairs stored for each architecture */
+#define MAX_ARRAY_SIZE      20
+
+/* The maximum length of a command line or command line argument */
+#define MAX_CMDLINEARG_SIZE 1024
 
 
 /***************************************************************************
  * ArchParameter
  **************************************************************************/
+/* Defines the object to store an individual key-value pair.
+ * The value can be of 4 different types:
+ *  - Boolean (represented as integer 1=true, 0=false)
+ *  - string (max length MAX_STRING_SIZE)
+ *  - Array of strings (each string has MAX_STRING_SIZE max length, and
+ *    the array has up to MAX_ARRAY_SIZE values)
+ *  - Env variables using the form $FOO.bar
+ */
 typedef enum {
     APVT_Invalid = 0,
     APVT_Boolean,
@@ -68,10 +89,9 @@ struct ArchParameter {
     struct SimpleListNode   parent;
     char                    key[MAX_STRING_SIZE];
     union {
-        char as_string[MAX_STRING_SIZE];    // Single string
+        char as_string[MAX_STRING_SIZE];
         char as_arrayOfStrings[MAX_ARRAY_SIZE][MAX_STRING_SIZE];
         int as_bool;
-        char as_envVariable[MAX_STRING_SIZE];
     } value;
     ArchParamValueType valueType;
 };
@@ -188,7 +208,7 @@ void dumpArch(struct SimpleList *list) {
                     break;
 
                 case APVT_EnvVariable:
-                    printf("\t\t%s=%s\n", param->key, param->value.as_envVariable);
+                    printf("\t\t%s=%s\n", param->key, param->value.as_string);
                     break;
 
                 case APVT_ArrayOfStrings: {
@@ -384,7 +404,7 @@ int printStringProperty(struct Architecture *arch, const char *propertyName, int
         }
 
     } else if (ap->valueType == APVT_EnvVariable) {
-        toPrint = &ap->value.as_envVariable[0];
+        toPrint = &ap->value.as_string[0];
 
     } else {
         fprintf(stderr, "Property '%s' is not a string or env variable for target %s\n", propertyName, arch->target);
@@ -738,7 +758,7 @@ int processKeyValuePairLine(char *line, struct ArchParameter *param) {
         /* When taking the env variable, skip the variable name.
          * For example, in the following:
          *      $CPU : $CPU.ppcbe
-         * the value.as_envVariable will get the value "ppcbe"
+         * the value.as_string will get the value "ppcbe"
          */
         tmp = strchr(val, '.');
         if (!tmp) {
@@ -747,7 +767,7 @@ int processKeyValuePairLine(char *line, struct ArchParameter *param) {
             return 0;
         }
 
-        strcpy(param->value.as_envVariable, tmp+1);
+        strcpy(param->value.as_string, tmp+1);
 
         return 1;
     }
