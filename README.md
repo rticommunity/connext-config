@@ -1,17 +1,19 @@
 # RTI Connext DDS Config
 
-A small command-line utiity, similar to pkg-config that help supply build information for a given architecture
+A small command-line utility, similar to pkg-config that help supply build information for a given architecture
 
 
 
 ## Usage
 
 ```
-RTI Connext DDS Config version 0.9.9
-------------------------------------------------------------------------------
+RTI Connext DDS Config version 1.0.0
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Usage:
-    connext-config [-h|--help|-V|--version]
-    connext-config --list-all
+    connext-config -h|--help    Show this help
+    connext-config -V|--version Prints version number
+    connext-config --list-all   List all platform architectures supported
+    connext-config --dump-all   Dump all platforms and all settings (testing only)
     connext-config [modifiers] <what> <targetArch>
 
 Where [modifiers] are:
@@ -20,7 +22,7 @@ Where [modifiers] are:
     --sh        use shell-like variable expansion (vs. make-like variables)
     --noexpand  do not expand environment variables in output
 
-And <what> (required) is one of:
+Required argument <what> is one of:
     --ccomp     output the C compiler to use
     --clink     output the C linker to use
     --cxxcomp   output the C++ compiler to use
@@ -34,8 +36,8 @@ And <what> (required) is one of:
     --os        output the OS (i.e. UNIX, ANDROID, IOS, ...)
     --platform  output the Platform (i.e. i86, x64, armv7a, ...)
 
-<targetArch> is one of the supported target architectures. Use --list-all
-to output a list of supported architectures
+Required argument <targetArch> is one of the supported target architectures.
+Use `--list-all` to output a list of supported architectures
 ```
 
 
@@ -46,7 +48,7 @@ The tool can be invoked in two ways:
    `pkg-config --list-all`. No other arguments are required.
 2. To obtain the right tool name, flags and libraries for a given architecture. 
 
-In general, when determining the tools required to build a RTI Connext DDS application, you might want to use this tool 5 times. For example, to build a C program:
+In general, when determining the tools required to build a RTI Connext DDS application, you may need to use this tool 5 times. For example, to build a C program:
 
 * Use the `--ccom` to determine the correct C compiler to use
 * Use the `--cflags` to determine the right flags for the C compiler 
@@ -87,11 +89,12 @@ $ ./connext-config --debug --static --ldlibs x64Linux2.6gcc4.5.1
 
 
 
-### Hello Builtin
+### How to use it in projects
 
-Inside the `examples` directory you can find the `examples/connext_dds/c/hello_builtin` example that is part of the installed `rti_workspace`. This example uses the popular autotools (autoconf, automake) to invoke `connext-config` to determine the correct build settings. 
+Inside the `examples` directory you can find some projects that uses this tool to automatically configure the build system.
 
-Refer to the [README.md](examples/autoconf-hello/README.md) file for additional information on this example.
+* `examples/autoconf-hello`: this is the same `hello_builtin` example that is part RTI workspace area (typically `~/rti_workspace`) under the `examples/connext_dds/c/hello_builtin` directory. This example uses the popular autotools (autoconf, automake) to invoke `connext-config` to determine the correct build settings. 
+  Refer to the [README.md](examples/autoconf-hello/README.md) file for additional information on this example.
 
 
 
@@ -99,13 +102,33 @@ Refer to the [README.md](examples/autoconf-hello/README.md) file for additional 
 
 ## Additional Notes
 
-* The tool looks at the target definition from the platform file used by rtiddsgen. This file is located under the following directory: `$NDDSHOME/resource/app/app_support/rtiddsgen/templates/projectfiles/platforms.vm`
-* `connext-config` will first use the environment variable `$NDDSHOME` to locate the platform file above. If `$NDDSHOME` is not defined, it will attempt to determine the location of the platform file from the location of the `connext-config` application.
-* The `--debug` option affects only the name of the required libraries and NOT the C or C++ compiler flags (for example, it does not include `-g` or disable any optimization). 
-* All the Windows architectures are **not supported**. 
-* To generate a stand-alone executable from the node.js application, you can use [pkg](https://www.npmjs.com/package/pkg) with node v10:
-  * Linux: `pkg -t node10-linux-x64 connext-config.js`
-  * MacOS: `pkg -t node10-darwin-x64 connext-config.js`
-* To install this application on your RTI Connext DDS Install (so it stays together with your installation):
+* The tool operates by looking up the requested information from the platform file used by `rtiddsgen`. This file is located under: `$NDDSHOME/resource/app/app_support/rtiddsgen/templates/projectfiles/platforms.vm`.
+
+  where `$NDDSHOME` is the directory where RTI Connext DDS is installed.
+  Because of this dependency, `connext-config` needs to be able to locate this directory.
+
+* `connext-config` will first use the environment variable `$NDDSHOME` to locate the platform file above. If `$NDDSHOME` is not defined, it will attempt to determine the location of the platform file from the location of the `connext-config` application (assumes this tool is invoked from the `$NDDSHOME/bin` directory).
+  If it cannot locate the `platforms.vm` file, it will report an error.
+
+* All the error messages are printed to `stderr`, while the normal results are printed to `stdout` (help is printed to `stdout`).
+
+* The `--debug` option affects only the name of the required libraries and NOT the C or C++ compiler flags (for example, it does not include `-g` or disable any optimization, nor define any debug-related macros). 
+
+* Many platforms are not supported: Windows, iOS, Integrity, and in general all the platform where a project is normally not built through Makefile. All the *nix-based architectures are supported.
+
+* To build `connext-config` from the source, just run:
+  
+  ```
+  $ autoreconf -ivf
+  $ ./configure
+  $ make
+  ```
+  
+  You need to have the traditional autoconf, automake, make, buildtools installed in your system.
+  
+* To install this application on your existing RTI Connext DDS installation:
+  
   * Copy the script: `bin/connext-config` under `$NDDSHOME/bin`
   * Copy the compiled version of connext-config under: `$NDDSHOME/resource/app/bin/<hostPlatform>` (where <hostPlatform> is the name of the directory containing platform-specific binaries).
+  
+  Alternatively just un-tar one of the pre-built binaries (see the [Release page](https://github.com/rticommunity/connext-config/releases))
