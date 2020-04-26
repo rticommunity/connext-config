@@ -235,7 +235,7 @@ void Architecture_finalize(struct Architecture *me) {
     /* Delete all the parameter nodes */
     struct REDAInlineListNode *next;
     struct REDAInlineListNode *node = REDAInlineList_getFirst(&me->paramList);
-    while(node) {
+    while (node != NULL) {
         next = REDAInlineListNode_getNext(node);
         ArchParameter_delete((struct ArchParameter *)node);
         node = next;
@@ -291,7 +291,7 @@ static char *calcNDDSHOME(const char *argv0) {
 
     /* Check if $NDDSHOME is defined */
     tmp = getenv("NDDSHOME");
-    if (tmp) {
+    if (tmp != NULL) {
         strncpy(retVal, tmp, PATH_MAX);
         return retVal;
     }
@@ -382,7 +382,7 @@ err:
  */
 static RTIBool validateNDDSHOME(const char *NDDSHOME) {
     struct stat info;
-    char path[PATH_MAX];
+    char path[PATH_MAX+1];
 
     if (snprintf(path, PATH_MAX, "%s/resource", NDDSHOME) > PATH_MAX) {
         fprintf(stderr, "Path too long while testing NDDSHOME\n");
@@ -606,14 +606,14 @@ static int arrayFind(const char **arr, const char *val) {
  *                  of the expansion or NULL if an error occurred.
  */
 static char * expandEnvVar(const char *inStr) {
-    static char retVal[MAX_CMDLINEARG_SIZE];
-    char varName[MAX_STRING_SIZE];
+    static char retVal[MAX_CMDLINEARG_SIZE+1];
+    char varName[MAX_STRING_SIZE+1];
     size_t wr = 0;     /* write pos */
     size_t rd;         /* read pos */
 
     memset(retVal, 0, sizeof(retVal));
 
-    for(rd = 0; inStr[rd] != '\0'; ++rd) {
+    for (rd = 0; inStr[rd] != '\0'; ++rd) {
         if ((inStr[rd] == '$') && inStr[rd+1]=='(') {
             /* Found the beginning of an nev variable, extract the name */
             size_t i = 0;
@@ -622,7 +622,7 @@ static char * expandEnvVar(const char *inStr) {
 
             memset(varName, 0, sizeof(varName));
             rd += 2;        /* Skip '$(' */
-            while(inStr[rd] != ')') {    /* Read var name until ')' */
+            while (inStr[rd] != ')') {    /* Read var name until ')' */
                 if (inStr[rd] == '\0') {
                     fprintf(stderr, 
                             "Cannot find end of env variable in string: '%s'\n", 
@@ -673,7 +673,7 @@ static char * expandEnvVar(const char *inStr) {
  */
 RTIBool printStringProperty(struct Architecture *arch,
         const char *propName,
-        int expandVar) {
+        RTIBool expandVar) {
     char *toPrint;
     struct ArchParameter *ap = archGetParam(arch, propName);
     if (ap == NULL) {
@@ -682,7 +682,7 @@ RTIBool printStringProperty(struct Architecture *arch,
     }
     if (ap->valueType == APVT_String) {
         toPrint = &ap->value.as_string[0];
-        if (expandVar) {
+        if (expandVar == RTI_TRUE) {
             toPrint = expandEnvVar(toPrint);
             if (toPrint == NULL) {
                 /* Error message has been already printed in expandEnvVar */
@@ -747,7 +747,7 @@ static int joinStringArrayProperties(struct Architecture *arch,
         return -1;
     }
 
-    while(ap->value.as_arrayOfStrings[i][0]) {
+    while (ap->value.as_arrayOfStrings[i][0] != '\0') {
         wr += snprintf(&bufOut[wr], 
                 bufSize-wr, 
                 "%s%s ", 
@@ -795,7 +795,7 @@ RTIBool printCompositeFlagsProperties(struct Architecture *arch,
 
     memset(line, 0, sizeof(line));
 
-    for (propIdx = 0; props[propIdx]; ++propIdx) {
+    for (propIdx = 0; props[propIdx] != NULL; ++propIdx) {
         /* Just a convenience alias */
         const char *propName = &props[propIdx][0];
 
@@ -829,7 +829,7 @@ RTIBool printCompositeFlagsProperties(struct Architecture *arch,
     }
     
     toPrint = &line[0];
-    if (expandVar) {
+    if (expandVar == RTI_TRUE) {
         toPrint = expandEnvVar(toPrint);
         if (toPrint == NULL) {
             return RTI_FALSE;
@@ -841,7 +841,7 @@ RTIBool printCompositeFlagsProperties(struct Architecture *arch,
      * with the javascript version)
      */
     wr = strlen(toPrint)-1;
-    while(isspace(toPrint[wr])) {
+    while (isspace(toPrint[wr])) {
         toPrint[wr--] = '\0';
     }
     puts(unescapeString(toPrint));
@@ -890,7 +890,7 @@ char * parseStringInQuotes(char *line,
      *      'MyValue=\"hello\"'
      * (the first strchr will identify the double quote).
      */
-    while (*tmp1) {
+    while (*tmp1 != '\0') {
         if (*tmp1 == '"') {
             break;
         }
@@ -1061,7 +1061,7 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
 
     /* Trim the beginning of the key */
     key = line;
-    while(isspace(*key) || (*key=='"')) {
+    while (isspace(*key) || (*key == '"')) {
         ++key;
     }
 
@@ -1075,7 +1075,7 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
     strcpy(param->key, key);
 
     /* Trim the beginning of the value */
-    while(isspace(*val)) ++val;
+    while (isspace(*val)) ++val;
 
     /* Identify the kind of value */
     if (strncmp(val, "true", 4) == 0) {
@@ -1210,7 +1210,7 @@ RTIBool readPlatformFile(const char *filePath,
         }
 
         trimLine = line;
-        if (longComment && ((tmp = strstr(trimLine, "*#")) != NULL)) {
+        if ((longComment == RTI_TRUE) && ((tmp = strstr(trimLine, "*#")) != NULL)) {
             longComment = RTI_FALSE;
             trimLine = tmp+2;
         }
@@ -1341,22 +1341,22 @@ RTIBool readPlatformFile(const char *filePath,
                  * In general remove all the architectures that don't define 
                  * the macros for the toolset (C_COMPILER, C_LINKER, ...)
                  */
-                int skipArch = 0;
+                RTIBool skipArch = RTI_FALSE;
                 struct ArchParameter * hidden = archGetParam(currentArch, 
                         "$HIDDEN");
-                if (hidden && 
+                if ((hidden != NULL) && 
                         ((hidden->valueType == APVT_Boolean) && 
                             hidden->value.as_bool)) {
-                    skipArch = 1;
+                    skipArch = RTI_TRUE;
                 }
                 if ((archGetParam(currentArch, "$C_COMPILER") == NULL) ||
                         (archGetParam(currentArch, "$C_LINKER") == NULL) ||
                         (archGetParam(currentArch, "$CXX_COMPILER") == NULL) ||
                         (archGetParam(currentArch, "$CXX_LINKER") == NULL)) {
-                    skipArch = 1;
+                    skipArch = RTI_TRUE;
                 }
 
-                if (skipArch) {
+                if (skipArch == RTI_TRUE) {
                     /* Drop skipped architectures */
                     Architecture_delete(currentArch);
                 } else {
@@ -1601,7 +1601,7 @@ int main(int argc, char **argv) {
     if ((strcmp(argOp, "--list-all") == 0)) {
         struct REDAInlineListNode *archNode;
         for (archNode = REDAInlineList_getFirst(archDef); 
-                archNode; 
+                archNode != NULL; 
                 archNode = REDAInlineListNode_getNext(archNode)) {
             struct Architecture *arch = (struct Architecture *)archNode;
             printf("%s\n", arch->target);
@@ -1635,11 +1635,11 @@ int main(int argc, char **argv) {
 
     /* Compose the NDDS-related includes and libraries */
     libSuffix = "";
-    if (argStatic && !argDebug) {
+    if ((argStatic == RTI_TRUE) && (argDebug == RTI_FALSE)) {
         libSuffix = "z";
-    } else if (!argStatic && argDebug) {
+    } else if ((argStatic == RTI_FALSE) && (argDebug == RTI_TRUE)) {
         libSuffix = "d";
-    } else if (argStatic && argDebug) {
+    } else if ((argStatic == RTI_TRUE) && (argDebug == RTI_TRUE)) {
         libSuffix = "zd";
     }
     nddsFlags = calloc(MAX_CMDLINEARG_SIZE+1, 1);
@@ -1651,7 +1651,7 @@ int main(int argc, char **argv) {
         goto done;
     }
 
-    if (argExpandEnvVar) {
+    if (argExpandEnvVar == RTI_TRUE) {
         /* Expand NDDSHOME */
         snprintf(nddsFlags,
                 MAX_CMDLINEARG_SIZE,
@@ -1675,7 +1675,7 @@ int main(int argc, char **argv) {
                 libSuffix);
     } else {
         /* Do not expand variables */
-        if (argShell) {
+        if (argShell == RTI_TRUE) {
             /* Use shell style */
             snprintf(nddsFlags,
                     MAX_CMDLINEARG_SIZE,
@@ -1858,10 +1858,10 @@ done:
     if (platformFile != NULL) {
         free(platformFile);
     }
-    if (archDef) {
+    if (archDef != NULL) {
         struct REDAInlineListNode *next;
         struct REDAInlineListNode *node = REDAInlineList_getFirst(archDef);
-        while(node != NULL) {
+        while (node != NULL) {
             next = REDAInlineListNode_getNext(node);
             Architecture_delete((struct Architecture *)node);
             node = next;
