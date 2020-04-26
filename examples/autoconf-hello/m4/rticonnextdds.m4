@@ -26,14 +26,14 @@ AC_ARG_WITH(rticonnextdds,
 [AC_HELP_STRING([--with-rticonnextdds],[specify the location of RTI Connext DDS (optional)])],
 [
         if test "${withval}" = "yes"; then
-            AC_MSG_ERROR(missing argument for --with-connextdds parameter);
+            AC_MSG_ERROR(missing argument for --with-rticonnextdds parameter);
         else
             NDDSHOME=`realpath "${withval}"`
         fi
 ],[
         AC_MSG_RESULT(Checking for NDDSHOME...)
         if test "a${NDDSHOME}a" = "aa"; then
-            AC_MSG_ERROR(NDDSHOME not defined. You must specify the --with-connextdds argument);
+            AC_MSG_ERROR(NDDSHOME not defined. You must specify the --with-rticonnextdds argument);
         else
             NDDSSHOME="${NDDSHOME}"
         fi
