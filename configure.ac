@@ -74,5 +74,35 @@ AC_ARG_ENABLE(warnings,
         CFLAGS="$CFLAGS -W"
 ])
 
+dnl ****************************************************************************
+dnl --with-rticonnextdds
+dnl ****************************************************************************
+AC_ARG_WITH(rticonnextdds,
+[AC_HELP_STRING([--with-rticonnextdds],[specify the location of RTI Connext DDS (optional)])],
+[
+        if test "${withval}" = "yes"; then
+            AC_MSG_ERROR(missing argument for --with-rticonnextdds parameter);
+        else
+            NDDSHOME=`realpath "${withval}"`
+        fi
+],[
+        AC_MSG_RESULT(Checking for NDDSHOME...)
+        if test "a${NDDSHOME}a" = "aa"; then
+            AC_MSG_ERROR(NDDSHOME not defined. You must specify the --with-rticonnextdds argument);
+        else
+            NDDSSHOME="${NDDSHOME}"
+        fi
+])
+
+dnl Verify the provided location
+AC_CHECK_FILE("${NDDSHOME}/include/ndds/ndds_c.h", 
+[
+        AC_MSG_RESULT(Using RTI Connext DDS at ${NDDSHOME})
+],[
+        AC_MSG_ERROR(RTI Connext DDS not found or NDDSHOME not defined)
+])
+
+CFLAGS="$CFLAGS -I${NDDSHOME}/include -I${NDDSHOME}/include/ndds"
+
 AC_OUTPUT(Makefile src/Makefile)
 

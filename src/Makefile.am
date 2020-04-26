@@ -7,4 +7,4 @@ AUTOMAKE_OPTIONS = subdir-objects
 
 bin_PROGRAMS = connext-config
 
-connext_config_SOURCES = connext-config.c linkedlist.c
+connext_config_SOURCES = connext-config.c

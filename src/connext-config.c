@@ -43,16 +43,23 @@
 #include <ctype.h>
 #include <errno.h>
 
-#include <libgen.h>     // For dirname()
+#include <libgen.h>     /* For dirname() */
+
+#include <sys/types.h>
+#include <sys/stat.h>   /* For stat() */
 
 #include <unistd.h>
 #include <limits.h>
 #include <assert.h>
 
-#include <linkedlist.h>
+#include <ndds/reda/reda_inlineList.h>
 
 #define APPLICATION_NAME                        "connext-config"
 #define APPLICATION_VERSION                     "1.0.0"
+
+/* The location of the platform file to parse, from the NDDSHOME directory */
+#define NDDS_PLATFORM_FILE      \
+    "resource/app/app_support/rtiddsgen/templates/projectfiles/platforms.vm"
 
 #define APPLICATION_EXIT_SUCCESS                0
 #define APPLICATION_EXIT_INVALID_ARGS           1
@@ -114,8 +121,8 @@ typedef enum {
 } ArchParamValueType;
 
 struct ArchParameter {
-    struct SimpleListNode   parent;
-    char                    key[MAX_STRING_SIZE];
+    struct REDAInlineListNode   parent;
+    char                        key[MAX_STRING_SIZE];
     union {
         /* 
          * Value is represented as a single string 
@@ -127,7 +134,7 @@ struct ArchParameter {
         char as_arrayOfStrings[MAX_ARRAY_SIZE][MAX_STRING_SIZE];
 
         /* Value is a boolean */
-        int as_bool;
+        RTIBool as_bool;
     } value;
     ArchParamValueType valueType;
 };
@@ -137,7 +144,7 @@ struct ArchParameter {
  * The initializer for the ArchParameter object
  */
 void ArchParameter_init(struct ArchParameter *me) {
-    SimpleListNode_init(&me->parent);
+    REDAInlineListNode_init(&me->parent);
     memset(me->key, 0, sizeof(me->key));
     memset(&me->value, 0, sizeof(me->value));
     me->valueType = APVT_Invalid;
@@ -158,21 +165,12 @@ struct ArchParameter * ArchParameter_new() {
 }
 
 /* }}} */
-/* {{{ ArchParameter_finalize
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * The finalizer for the ArchParameter objec
- */
-void ArchParameter_finalize(struct ArchParameter *me) {
-    SimpleListNode_finalize(&me->parent);
-}
-
-/* }}} */
 /* {{{ ArchParameter_delete
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * The destructor for the ArchParameter object
  */
 void ArchParameter_delete(struct ArchParameter *me) {
-    ArchParameter_finalize(me);
+    memset(me, 0, sizeof(*me));
     free(me);
 }
 
@@ -191,9 +189,9 @@ void ArchParameter_delete(struct ArchParameter *me) {
  * An Architecture is also a node of a linked list itself.
  */
 struct Architecture {
-    struct SimpleListNode   parent;
-    char                    target[MAX_STRING_SIZE];
-    struct SimpleList       paramList;
+    struct REDAInlineListNode   parent;
+    char                        target[MAX_STRING_SIZE];
+    struct REDAInlineList       paramList;
 };
 
 /* {{{ Architecture_init
@@ -201,14 +199,9 @@ struct Architecture {
  * Architecture initializer
  */
 void Architecture_init(struct Architecture *me) {
-    SimpleListNode_init(&me->parent);
+    REDAInlineListNode_init(&me->parent);
     memset(me->target, 0, sizeof(me->target));
-    SimpleList_init(&me->paramList);
-
-    /* Set the node destructor of the list of parameter so all the nodes
-     * will be properly released when this list is finalized
-     */
-    SimpleList_setNodeDestructor(&me->paramList, (SimpleListNodeDestructorFn)ArchParameter_delete);
+    REDAInlineList_init(&me->paramList);
 }
 
 /* }}} */
@@ -231,8 +224,16 @@ struct Architecture * Architecture_new() {
  * Architecture finalizer
  */
 void Architecture_finalize(struct Architecture *me) {
-    SimpleListNode_finalize(&me->parent);
-    SimpleList_finalize(&me->paramList);
+    /* Delete all the parameter nodes */
+    struct REDAInlineListNode *next;
+    struct REDAInlineListNode *node = REDAInlineList_getFirst(&me->paramList);
+    while(node) {
+        next = REDAInlineListNode_getNext(node);
+        ArchParameter_delete((struct ArchParameter *)node);
+        node = next;
+    }
+
+    memset(me, 0, sizeof(*me));
 }
 
 /* }}} */
@@ -251,6 +252,152 @@ void Architecture_delete(struct Architecture *me) {
 /***************************************************************************
  * Local Utility Functions
  **************************************************************************/
+/* {{{ calcNDDSHOME
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Determines the root directory where RTI Connext DDS is installed (NDDEHOME)
+ * The logic is the following:
+ * - Look up the environment variable NDDSHOME. If is defined, good, make
+ *   a copy and return
+ *
+ * - If is not defined, retrieve the absolute path where connext-config is
+ *   invoked by looking at argv[0] and the current working directory
+ *
+ * - Then go one level up (assumes the connext-config is installed under
+ *   NDDSHOME/bin) and use that directory as NDDSHOME
+ *
+ *
+ * \return a malloc-allocated string containing NDDSHOME or NULL if an
+ *         error occurred
+ *
+ *
+ */
+static char *calcNDDSHOME(const char *argv0) {
+    char *tmp;
+    char *retVal = NULL;
+
+    retVal = calloc(PATH_MAX+1, 1);
+    if (retVal == NULL) {
+        fprintf(stderr, "Out of memory allocating NDDSHOME path\n");
+        goto err;
+    }
+
+    // Check if $NDDSHOME is defined
+    tmp = getenv("NDDSHOME");
+    if (tmp) {
+        strncpy(retVal, tmp, PATH_MAX);
+        return retVal;
+    }
+
+    // Else, obtain NDDSHOME from argv0
+    if (argv0[0] == '/') {
+        // argv0 is absolute path
+        strncpy(retVal, argv0, PATH_MAX);
+    } else {
+        // argv0 is a relative path, build the absolute path by looking at the current working directory
+        // TODO: Re-enable the use of getcwd as PWD might not be defined when running in a docker container
+        char *appPath;
+        // Build the absolute path to this scripb from the current working directory
+        snprintf(retVal, PATH_MAX, "%s/%s", getenv("PWD"), argv0);
+        /*
+        if (!getcwd(cwd, PATH_MAX)) {
+            printf("Error: failed to read current working directory while attempting to locate the platform.vm file\n");
+            printf("Try re-running with NDDSHOME environment variable defined\n");
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+        strncat(cwd, "/", PATH_MAX-strlen(cwd));
+        strncat(cwd, argv0, PATH_MAX-strlen(cwd));
+        */
+        appPath = realpath(retVal, NULL);
+        if (appPath == NULL) {
+            fprintf(stderr, 
+                    "Unable to compute NDDSHOME: %s (errno=%d)\n", 
+                    strerror(errno), 
+                    errno);
+            goto err;
+        }
+        strncpy(retVal, appPath, PATH_MAX);
+        /* realpath allocates the output string, need to free after making a copy... */
+        free(appPath);
+    }
+    /*
+     * Now 'retVal' contains the absolute path of this app, call dirname twice to
+     * retrieve the directory parent of where this app is installed
+     *
+     * Note that dirname() modify the input buffer and returns a "pointer to
+     * null-terminated strings"... most likely it just locate the last path
+     * separator and replace it with '\0', meaning the returned string is
+     * the same as the input string...
+     */
+    tmp = dirname(retVal);
+    if (tmp != retVal) {
+        strncpy(retVal, tmp, PATH_MAX);
+    }
+    tmp = dirname(retVal);
+    if (tmp != retVal) {
+        strncpy(retVal, tmp, PATH_MAX);
+    }
+    return retVal;
+
+err:
+    if (retVal != NULL) {
+        free(retVal);
+    }
+    return NULL;
+}
+
+/* }}} */
+/* {{{ validateNDDSHOME
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Validates that the calculated NDDSHOME is correct by looking at the 
+ * directory 'resource' under NDDSHOME.
+ *
+ * \param NDDSHOME  pointer to the full path of NDDSHOME
+ * \return          the boolean RTI_TRUE if the NDDSHOME was sucessfully
+ *                  validated, RTI_FALSE if NDDSHOME is invalid
+ *                  (a more detailed error is printed to stderr)
+ */
+static RTIBool validateNDDSHOME(const char *NDDSHOME) {
+    struct stat info;
+    char path[PATH_MAX];
+
+    if (snprintf(path, PATH_MAX, "%s/resource", NDDSHOME) > PATH_MAX) {
+        fprintf(stderr, "Path too long while testing NDDSHOME\n");
+        return RTI_FALSE;
+    }
+
+    if (stat(path, &info) < 0) {
+        if (errno == ENOENT) {
+            fprintf(stderr,
+                    "Unable to identify NDDSHOME.\n");
+            goto err;
+        }
+        // else is another error
+        fprintf(stderr, 
+                "Error retrieving information about resource dir: '%s': %s (errno=%d)\n",
+                path,
+                strerror(errno),
+                errno);
+        goto err;
+    }
+    if (!S_ISDIR(info.st_mode)) {
+        fprintf(stderr,
+                "Resource directory '%s' is not a valid directory\n",
+                path);
+        goto err;
+    }
+    return RTI_TRUE;
+
+err:
+    fprintf(stderr,
+            "Make sure the environment variable NDDSHOME is defined\n");
+    fprintf(stderr,
+            "or that %s is installed correctly under $NDDSHOME/bin\n",
+            APPLICATION_NAME);
+    return RTI_FALSE;
+}
+
+/* }}} */
 /* {{{ dumpArch
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * Prints to stdout a dump of the list of architectures.
@@ -261,19 +408,19 @@ void Architecture_delete(struct Architecture *me) {
  * \param list      The list of Architecture objects
  *
  */
-static void dumpArch(struct SimpleList *list) {
-    struct SimpleListNode *archNode = NULL;
+static void dumpArch(struct REDAInlineList *list) {
+    struct REDAInlineListNode *archNode = NULL;
 
-    for (archNode = SimpleList_getBegin(list); 
+    for (archNode = REDAInlineList_getFirst(list); 
             archNode; 
-            archNode = SimpleListNode_getNext(archNode)) {
-        struct SimpleListNode *paramNode;
+            archNode = REDAInlineListNode_getNext(archNode)) {
+        struct REDAInlineListNode *paramNode;
         struct Architecture *arch = (struct Architecture *)archNode;
         printf("arch='%s':\n", arch->target);
 
-        for (paramNode = SimpleList_getBegin(&arch->paramList); 
+        for (paramNode = REDAInlineList_getFirst(&arch->paramList); 
                 paramNode; 
-                paramNode = SimpleListNode_getNext(paramNode)) {
+                paramNode = REDAInlineListNode_getNext(paramNode)) {
             struct ArchParameter *param = (struct ArchParameter *)paramNode;
             switch(param->valueType) {
                 case APVT_Boolean:
@@ -327,10 +474,10 @@ static void dumpArch(struct SimpleList *list) {
  *                  requested key is not found
  */
 static struct ArchParameter * archGetParam(struct Architecture *arch, const char *key) {
-    struct SimpleListNode *paramNode;
-    for (paramNode = SimpleList_getBegin(&arch->paramList);
+    struct REDAInlineListNode *paramNode;
+    for (paramNode = REDAInlineList_getFirst(&arch->paramList);
             paramNode;
-            paramNode = SimpleListNode_getNext(paramNode)) {
+            paramNode = REDAInlineListNode_getNext(paramNode)) {
         struct ArchParameter *param = (struct ArchParameter *)paramNode;
         if (!strcmp(param->key, key)) {
             return param;
@@ -499,16 +646,16 @@ static char * expandEnvVar(const char *inStr) {
  * \param propName  the name of the property to lookup
  * \param expandVar the boolean that tells whether to expand the env 
  *                  variables or not.
- * \return          1 if success, 0 if failed
+ * \return          RTI_TRUE if success, RTI_FALSE if failed
  */
-int printStringProperty(struct Architecture *arch,
+RTIBool printStringProperty(struct Architecture *arch,
         const char *propName,
         int expandVar) {
     char *toPrint;
     struct ArchParameter *ap = archGetParam(arch, propName);
     if (ap == NULL) {
         /* Variable not defined */
-        return 1;
+        return RTI_TRUE;
     }
     if (ap->valueType == APVT_String) {
         toPrint = &ap->value.as_string[0];
@@ -516,7 +663,7 @@ int printStringProperty(struct Architecture *arch,
             toPrint = expandEnvVar(toPrint);
             if (toPrint == NULL) {
                 // Error message has been already printed in expandEnvVar
-                return 0;
+                return RTI_FALSE;
             }
         }
 
@@ -528,10 +675,10 @@ int printStringProperty(struct Architecture *arch,
                 "Property '%s' is not a string or env variable for target %s\n", 
                 propName, 
                 arch->target);
-        return 0;
+        return RTI_FALSE;
     }
     puts(toPrint);
-    return 1;
+    return RTI_TRUE;
 }
 
 /* }}} */
@@ -609,13 +756,13 @@ static int joinStringArrayProperties(struct Architecture *arch,
  *      from the architecture.
  *      Each property value is expected to be an array of strings identifying
  *      the flags. Each flag is prefixed with a "-" (or "-I" for $INCLUDES)
- * expandVar is a boolean that tells whether to expand environment variables (1)
- *      or not (0).
- * Returns 0 if an error occurred, or 1 if success
+ * expandVar is a boolean that tells whether to expand environment variables
+ *      (TRUE) or not (FALSE).
+ * Returns RTI_FALSE if an error occurred, or RTI_TRUE if success
  */
-int printCompositeFlagsProperties(struct Architecture *arch, 
+RTIBool printCompositeFlagsProperties(struct Architecture *arch, 
         const char **props, 
-        int expandVar) {
+        RTIBool expandVar) {
     char line[MAX_CMDLINEARG_SIZE];
     int wr = 0;
     int rc = 0;
@@ -641,7 +788,7 @@ int printCompositeFlagsProperties(struct Architecture *arch,
                     propName, 
                     prefix);
             if (rc == -1) {
-                return 0;
+                return RTI_FALSE;
             }
         } else {
             /* Copy verbatim the propName */
@@ -652,7 +799,7 @@ int printCompositeFlagsProperties(struct Architecture *arch,
             if (rc > MAX_CMDLINEARG_SIZE-wr) {
                 fprintf(stderr, 
                         "Command line string too long while appending static flags\n");
-                return 0;
+                return RTI_FALSE;
             }
         }
         wr += rc;
@@ -662,7 +809,7 @@ int printCompositeFlagsProperties(struct Architecture *arch,
     if (expandVar) {
         toPrint = expandEnvVar(toPrint);
         if (toPrint == NULL) {
-            return 0;
+            return RTI_FALSE;
         }
     }
     // Now the toPrint string should always have a space at the end, remove it
@@ -673,7 +820,7 @@ int printCompositeFlagsProperties(struct Architecture *arch,
         toPrint[wr--] = '\0';
     }
     puts(unescapeString(toPrint));
-    return 1;
+    return RTI_TRUE;
 }
 
 /* }}} */
@@ -766,7 +913,7 @@ char * parseStringInQuotes(char *line,
 //      #arch("armv7Linux3.0","gcc4.6.1.cortex-a9" {
 // Identify the two strings and copy them inside 'target', and 'compiler' 
 // (each one of max length MAX_STRING_SIZE)
-int processArchDefinitionLine(const char *line, char *target, char *compiler) {
+RTIBool processArchDefinitionLine(const char *line, char *target, char *compiler) {
     char *tmp1;
     char *tmp2;
 
@@ -776,7 +923,7 @@ int processArchDefinitionLine(const char *line, char *target, char *compiler) {
     if (!tmp1) {
         fprintf(stderr, "Cannot find start target in arch definition: '%s'\n", 
                 line);
-        return 0;
+        return RTI_FALSE;
     }
     ++tmp1;
 
@@ -784,18 +931,18 @@ int processArchDefinitionLine(const char *line, char *target, char *compiler) {
     if (!tmp2) {
         fprintf(stderr, "Cannot find end target in arch definition: '%s'\n", 
                 line);
-        return 0;
+        return RTI_FALSE;
     }
     if (tmp2 <= tmp1) {
         fprintf(stderr, "Unable to identify target arch in line: '%s'\n", 
                 line);
-        return 0;
+        return RTI_FALSE;
     }
 
     if (tmp2-tmp1 > MAX_STRING_SIZE) {
         fprintf(stderr, "Target arch name '%s' too large: (%ld, max=%d)\n", 
                 tmp1, (tmp2-tmp1), MAX_STRING_SIZE);
-        return 0;
+        return RTI_FALSE;
     }
     memcpy(&target[0], tmp1, (tmp2-tmp1));
 
@@ -804,7 +951,7 @@ int processArchDefinitionLine(const char *line, char *target, char *compiler) {
     if (!tmp1) {
         fprintf(stderr, "Cannot find start compiler in arch definition: '%s'\n", 
                 line);
-        return 0;
+        return RTI_FALSE;
     }
     ++tmp1;
 
@@ -812,7 +959,7 @@ int processArchDefinitionLine(const char *line, char *target, char *compiler) {
     if (!tmp2) {
         fprintf(stderr, "Cannot find end compiler in arch definition: '%s'\n", 
                 line);
-        return 0;
+        return RTI_FALSE;
     }
 
     // Some targets have an empty compiler name
@@ -820,11 +967,11 @@ int processArchDefinitionLine(const char *line, char *target, char *compiler) {
         if (tmp2-tmp1 > MAX_STRING_SIZE) {
             fprintf(stderr, "Compiler name '%s' too large: (%ld, max=%d) for target='%s'\n", 
                     tmp1, (tmp2-tmp1), MAX_STRING_SIZE, target);
-            return 0;
+            return RTI_FALSE;
         }
         memcpy(&compiler[0], tmp1, (tmp2-tmp1));
     }
-    return 1;
+    return RTI_TRUE;
 }
 
 // }}}
@@ -837,7 +984,7 @@ int processArchDefinitionLine(const char *line, char *target, char *compiler) {
 // Notes:
 // - The number of heading space is not fixed
 // - Key _usually_ starts with '$', but there are some variables: "TR_VAR": "..."
-int processKeyValuePairLine(char *line, struct ArchParameter *param) {
+RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
     char *key;
     char *val;
     char *tmp;
@@ -847,7 +994,7 @@ int processKeyValuePairLine(char *line, struct ArchParameter *param) {
     if (!tmp) {
         fprintf(stderr, "Cannot find key-value pair delimiter ':' in line: '%s'\n", 
                 line);
-        return 0;
+        return RTI_FALSE;
     }
     val = tmp+1;
 
@@ -865,7 +1012,7 @@ int processKeyValuePairLine(char *line, struct ArchParameter *param) {
     if (strlen(key) > sizeof(param->key)) {
         fprintf(stderr, "Key too long: '%s' (>%ld)\n",
                 key, sizeof(param->key));
-        return 0;
+        return RTI_FALSE;
     }
 
     strcpy(param->key, key);
@@ -877,12 +1024,12 @@ int processKeyValuePairLine(char *line, struct ArchParameter *param) {
     if (!strncmp(val, "true", 4)) {
         param->valueType = APVT_Boolean;
         param->value.as_bool = 1;
-        return 1;
+        return RTI_TRUE;
     }
     if (!strncmp(val, "false", 5)) {
         param->valueType = APVT_Boolean;
         param->value.as_bool = 0;
-        return 1;
+        return RTI_TRUE;
     }
     if ((*val == '"') || (*val == '\'')) {
         const char *errMsg;
@@ -894,9 +1041,9 @@ int processKeyValuePairLine(char *line, struct ArchParameter *param) {
         if (!val) {
             fprintf(stderr, "Error: %s while parsing key-value pair line: '%s'\n",
                     errMsg, line);
-            return 0;
+            return RTI_FALSE;
         }
-        return 1;
+        return RTI_TRUE;
     }
 
     if (*val == '[') {
@@ -912,13 +1059,13 @@ int processKeyValuePairLine(char *line, struct ArchParameter *param) {
             if (val == NULL) {
                 fprintf(stderr, "Error: %s while parsing key-value pair line: '%s'\n",
                         errMsg, line);
-                return 0;
+                return RTI_FALSE;
             }
             ++val;
             ++idx;
         }
 
-        return 1;
+        return RTI_TRUE;
     }
     if (*val == '$') {
         // Value is an env variable
@@ -927,7 +1074,7 @@ int processKeyValuePairLine(char *line, struct ArchParameter *param) {
         if (!tmp) {
             fprintf(stderr, "Unable to find end of env variable delimiter in line '%s'\n",
                     line);
-            return 0;
+            return RTI_FALSE;
         }
         *tmp = '\0';
         /* When taking the env variable, skip the variable name.
@@ -939,24 +1086,24 @@ int processKeyValuePairLine(char *line, struct ArchParameter *param) {
         if (!tmp) {
             fprintf(stderr, "Unable to find '.' delimiter of env variable in line '%s'\n",
                     line);
-            return 0;
+            return RTI_FALSE;
         }
 
         strcpy(param->value.as_string, tmp+1);
 
-        return 1;
+        return RTI_TRUE;
     }
 
 
-    return 1;
+    return RTI_TRUE;
 }
 
 // }}}
 // {{{ readPlatformFile
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Returns 0 if failed, 1 if success
-int readPlatformFile(const char *filePath, struct SimpleList *archDef) {
-    int ok = 0;
+RTIBool readPlatformFile(const char *filePath, struct REDAInlineList *archDef) {
+    RTIBool ok = RTI_FALSE;
     FILE *fp;
     char *line = NULL;
     size_t lineLen = 0;
@@ -973,8 +1120,8 @@ int readPlatformFile(const char *filePath, struct SimpleList *archDef) {
 
     fp = fopen(filePath, "r");
     if (!fp) {
-        fprintf(stderr, "File not found: %s\n", filePath);
-        goto done;
+        fprintf(stderr, "Platform file not found: %s\n", filePath);
+        return RTI_FALSE;
     }
 
     while (getline(&line, &lineLen, fp) != -1) {
@@ -1029,7 +1176,7 @@ int readPlatformFile(const char *filePath, struct SimpleList *archDef) {
                     fprintf(stderr, "Out of memory allocating currentArch\n");
                     goto done;
                 }
-                if (processArchDefinitionLine(trimLine, &target[0], &compiler[0]) == FL_FALSE) {
+                if (processArchDefinitionLine(trimLine, &target[0], &compiler[0]) == RTI_FALSE) {
                     goto done;
                 }
                 if (strlen(target) + strlen(compiler) > MAX_STRING_SIZE) {
@@ -1080,27 +1227,19 @@ int readPlatformFile(const char *filePath, struct SimpleList *archDef) {
                 if (hidden && ((hidden->valueType == APVT_Boolean) && hidden->value.as_bool)) {
                     skipArch = 1;
                 }
-#if 1
                 if (!archGetParam(currentArch, "$C_COMPILER") ||
                         !archGetParam(currentArch, "$C_LINKER") ||
                         !archGetParam(currentArch, "$CXX_COMPILER") ||
                         !archGetParam(currentArch, "$CXX_LINKER")) {
                     skipArch = 1;
                 }
-#else
-                if ((strstr(currentArch->target, "Win") != NULL) || 
-                    (strstr(currentArch->target, "INtime6") != NULL) ||
-                    (strstr(currentArch->target, "iOS") != NULL)) {
-                    skipArch = 1;
-                }
-#endif
 
                 if (skipArch) {
                     // Drop skipped architectures
                     Architecture_delete(currentArch);
                 } else {
                     // Valid, push the arch to the archDef
-                    SimpleList_addToEnd(archDef, &currentArch->parent);
+                    REDAInlineList_addNodeToBackEA(archDef, &currentArch->parent);
                 }
 
                 currentArch = NULL;
@@ -1119,7 +1258,7 @@ int readPlatformFile(const char *filePath, struct SimpleList *archDef) {
                 goto done;
             }
             // Got a valid line:
-            SimpleList_addToEnd(&currentArch->paramList, &currentParam->parent);
+            REDAInlineList_addNodeToBackEA(&currentArch->paramList, &currentParam->parent);
             currentParam = NULL;
             continue;
         }
@@ -1127,7 +1266,7 @@ int readPlatformFile(const char *filePath, struct SimpleList *archDef) {
         fprintf(stderr, "Error: unexpected state: %d\n", rsm);
         goto done;
     }
-    ok = 1;
+    ok = RTI_TRUE;
 
 done:
     if (fp) {
@@ -1191,23 +1330,19 @@ void usage() {
 int main(int argc, char **argv) {
     const char *argOp = NULL;
     const char *argTarget = NULL;
-    int argStatic = 0;
-    int argDebug = 0;
-    int argShell = 0;
-    int argExpandEnvVar = 1;
-    char *tmp;
+    RTIBool argStatic = RTI_FALSE;
+    RTIBool argDebug = RTI_FALSE;
+    RTIBool argShell = RTI_FALSE;
+    RTIBool argExpandEnvVar = RTI_TRUE;
     char *NDDSHOME = NULL;
     char *platformFile = NULL;
     int retCode = APPLICATION_EXIT_UNKNOWN;
-    struct SimpleList   archDef;
+    struct REDAInlineList *archDef = NULL;
     struct Architecture *archTarget;
     char *nddsFlags = NULL;
     char *nddsCLibs = NULL;
     char *nddsCPPLibs = NULL;
     const char *libSuffix;
-
-    SimpleList_init(&archDef);
-    SimpleList_setNodeDestructor(&archDef, (SimpleListNodeDestructorFn)Architecture_delete);
 
     if (argc <= 1) {
         usage();
@@ -1241,19 +1376,19 @@ int main(int argc, char **argv) {
 
         for (i = 1; i < argc-1; ++i) {
             if (!strcmp(argv[i], "--static")) {
-                argStatic = 1;
+                argStatic = RTI_TRUE;
                 continue;
             }
             if (!strcmp(argv[i], "--debug")) {
-                argDebug = 1;
+                argDebug = RTI_TRUE;
                 continue;
             }
             if (!strcmp(argv[i], "--shell") || !strcmp(argv[i], "--sh")) {
-                argShell = 1;
+                argShell = RTI_TRUE;
                 continue;
             }
             if (!strcmp(argv[i], "--noexpand")) {
-                argExpandEnvVar = 0;
+                argExpandEnvVar = RTI_FALSE;
                 continue;
             }
             if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
@@ -1286,71 +1421,48 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Check if $NDDSHOME is defined
-    NDDSHOME = calloc(PATH_MAX+1, 1);
-    if (!NDDSHOME) {
-        fprintf(stderr, "Out of memory allocating NDDSHOME path\n");
+    // Determine NDDSHOME and platform file
+    NDDSHOME = calcNDDSHOME(argv[0]);
+    if (NDDSHOME == NULL) {
         retCode = APPLICATION_EXIT_FAILURE;
         goto done;
     }
-    tmp = getenv("NDDSHOME");
-    if (tmp) {
-        strncpy(NDDSHOME, tmp, PATH_MAX);
-    } else {
-        // Obtain NDDSHOME from argv[0]
-        if (argv[0][0] == '/') {
-            // argv[0] is absolute path
-            strncpy(NDDSHOME, argv[0], PATH_MAX);
-        } else {
-            char *appPath;
-            // Build the absolute path to this scripb from the current working directory
-            snprintf(NDDSHOME, PATH_MAX, "%s/%s", getenv("PWD"), argv[0]);
-            /*
-            if (!getcwd(cwd, PATH_MAX)) {
-                printf("Error: failed to read current working directory while attempting to locate the platform.vm file\n");
-                printf("Try re-running with NDDSHOME environment variable defined\n");
-                retCode = APPLICATION_EXIT_FAILURE;
-                goto done;
-            }
-            strncat(cwd, "/", PATH_MAX-strlen(cwd));
-            strncat(cwd, argv[0], PATH_MAX-strlen(cwd));
-            */
-            appPath = realpath(NDDSHOME, NULL);
-            if (!appPath) {
-                fprintf(stderr, "Unable to compute NDDSHOME: %s (errno=%d)\n", strerror(errno), errno);
-                retCode = APPLICATION_EXIT_NO_NDDSHOME;
-                goto done;
-            }
-            strncpy(NDDSHOME, appPath, PATH_MAX);
-            free(appPath);
-        }
-        // Go two level up
-        tmp = dirname(NDDSHOME);
-        strncpy(NDDSHOME, tmp, PATH_MAX);
-        tmp = dirname(NDDSHOME);
-        strncpy(NDDSHOME, tmp, PATH_MAX);
+    if (!validateNDDSHOME(NDDSHOME)) {
+        retCode = APPLICATION_EXIT_FAILURE;
+        goto done;
     }
 
     // Complete building the path to the platform.vm file:
     platformFile = calloc(PATH_MAX+1, 1);
     if (!platformFile) {
-        printf("Out of memory allocating platformFile path\n");
+        fprintf(stderr, "Out of memory allocating platformFile path\n");
         retCode = APPLICATION_EXIT_FAILURE;
         goto done;
     }
-    snprintf(platformFile, PATH_MAX, "%s/resource/app/app_support/rtiddsgen/templates/projectfiles/platforms.vm", NDDSHOME);
+    snprintf(platformFile, PATH_MAX, "%s/%s", NDDSHOME, NDDS_PLATFORM_FILE);
+
+    /* Allocate the archDef list */
+    archDef = calloc(1, sizeof(*archDef));
+    if (archDef == NULL) {
+        fprintf(stderr, "Out of memory allocating archDef\n");
+        retCode = APPLICATION_EXIT_FAILURE;
+        goto done;
+    }
+    REDAInlineList_init(archDef);
 
     // Read and parse platform file
-    readPlatformFile(platformFile, &archDef);
+    readPlatformFile(platformFile, archDef);
     if (!strcmp(argOp, "--dump-all")) {
-        dumpArch(&archDef);
+        dumpArch(archDef);
         retCode = APPLICATION_EXIT_SUCCESS;
         goto done;
     }
 
     if (!strcmp(argOp, "--list-all")) {
-        struct SimpleListNode *archNode;
-        for (archNode = SimpleList_getBegin(&archDef); archNode; archNode = SimpleListNode_getNext(archNode)) {
+        struct REDAInlineListNode *archNode;
+        for (archNode = REDAInlineList_getFirst(archDef); 
+                archNode; 
+                archNode = REDAInlineListNode_getNext(archNode)) {
             struct Architecture *arch = (struct Architecture *)archNode;
             printf("%s\n", arch->target);
         }
@@ -1361,8 +1473,8 @@ int main(int argc, char **argv) {
     // Find target
     {
         archTarget = NULL;
-        struct SimpleListNode *node;
-        for (node = SimpleList_getBegin(&archDef); node; node = SimpleListNode_getNext(node)) {
+        struct REDAInlineListNode *node;
+        for (node = REDAInlineList_getFirst(archDef); node; node = REDAInlineListNode_getNext(node)) {
             struct Architecture *arch = (struct Architecture *)node;
             if (!strcmp(arch->target, argTarget)) {
                 archTarget = arch;
@@ -1529,7 +1641,6 @@ int main(int argc, char **argv) {
         retCode = APPLICATION_EXIT_INVALID_ARGS;
     }
 
-
 done:
     if (NDDSHOME) {
         free(NDDSHOME);
@@ -1537,7 +1648,16 @@ done:
     if (platformFile) {
         free(platformFile);
     }
-    SimpleList_finalize(&archDef);
+    if (archDef) {
+        struct REDAInlineListNode *next;
+        struct REDAInlineListNode *node = REDAInlineList_getFirst(archDef);
+        while(node) {
+            next = REDAInlineListNode_getNext(node);
+            Architecture_delete((struct Architecture *)node);
+            node = next;
+        }
+        free(archDef);
+    }
     if (nddsFlags) {
         free(nddsFlags);
     }
