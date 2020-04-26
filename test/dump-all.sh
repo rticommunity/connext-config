@@ -34,6 +34,10 @@ for target in $allTargets; do
         tmp="`$CONNEXT_CONFIG --noexpand $cmd $target`"
         [ $? -ne 0 ] && echo "Failed command: $CONNEXT_CONFIG --noexpand $cmd $target" && exit 1
         echo "\t$cmd (ne) = $tmp"
+
+        tmp="`$CONNEXT_CONFIG --noexpand --shell $cmd $target`"
+        [ $? -ne 0 ] && echo "Failed command: $CONNEXT_CONFIG --noexpand --shell $cmd $target" && exit 1
+        echo "\t$cmd (ne) = $tmp"
     done
     tmp="`$CONNEXT_CONFIG --noexpand --debug --ldlibs $target`"
     [ $? -ne 0 ] && echo "Failed command: $CONNEXT_CONFIG --noexpand --debug --ldlibs $target" && exit 1

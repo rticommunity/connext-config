@@ -24,17 +24,6 @@
  * distributions, so settings cannot be embedded in this file.
  * ---------------------------------------------------------------------------
  *
- * TODO / ISSUES:
- *  - if --noexpand and --shell is used, the env variables should all have 
- *    the form ${FOO}, but if the variable comes from the platform file,
- *    it retains the form $(FOO), getting mixed output.
- *    For example: 
- *      ./src/connext-config --noexpand --shell --cflags armv7aAndroid2.3gcc4.8
- *    produces the following output:
- *      -Wall -I$(ANDROID_NDK_PATH)/platforms/... -I${NDDSHOME}/include/ndds
- *               ^^^^^^^^^^^^^^^^^^
- *               Here we need to replace to ${...}
- *
  */
 
 
@@ -772,20 +761,28 @@ static int joinStringArrayProperties(struct Architecture *arch,
  * Given an architecture, prints the flags composed by getting the values of 
  * more than one properties.
  *
- * props is a NULL terminated array of strings identifying either the name 
- *      of the property to look up (if string starts with '$'), or a verbatim
- *      string that need to be appended.
- *      If the name starts with a '$', then the property value is looked up
- *      from the architecture.
- *      Each property value is expected to be an array of strings identifying
- *      the flags. Each flag is prefixed with a "-" (or "-I" for $INCLUDES)
- * expandVar is a boolean that tells whether to expand environment variables
- *      (TRUE) or not (FALSE).
- * Returns RTI_FALSE if an error occurred, or RTI_TRUE if success
+ * \param arch      Pointer to the architecture to use
+ * \param props     a NULL terminated array of strings identifying either 
+ *                  the name of the property to look up (if string starts with
+ *                  '$'), or a verbatim string that need to be appended.
+ *                  If the name starts with a '$', then the property value is 
+ *                  looked up from the architecture.
+ *                  Each property value is expected to be an array of strings 
+ *                  identifying the flags. Each flag is prefixed with a "-" 
+ *                  (or "-I" for $INCLUDES)
+ * \param expandVar a boolean that tells whether to expand environment 
+ *                  variables (RTI_TRUE) or not (RTI_FALSE).
+ * \param envShell  a boolean that if expandVar == FALSE, what is the form of
+ *                  env variable reference to use: shell (RTI_TRUE) means
+ *                  that variables are using the form ${...} (with braces).
+ *                  If envShell==RTI_FALSE, the variables are using a 
+ *                  Makefile-style form: $(...) (with the parentheses)
+ * \return return   RTI_FALSE if an error occurred, or RTI_TRUE if success
  */
 RTIBool printCompositeFlagsProperties(struct Architecture *arch, 
         const char **props, 
-        RTIBool expandVar) {
+        RTIBool expandVar,
+        RTIBool envShell) {
     char line[MAX_CMDLINEARG_SIZE];
     int wr = 0;
     int rc = 0;
@@ -834,6 +831,32 @@ RTIBool printCompositeFlagsProperties(struct Architecture *arch,
         if (toPrint == NULL) {
             return RTI_FALSE;
         }
+    } else {
+        /* 
+         * Do not expand env variable: make sure all the env
+         * variabels are in the form $(...) or ${...}, depending
+         * if the argument --shell is provided
+         */
+        char open_from = envShell ? '(' : '{';
+        char open_to   = envShell ? '{' : '(';
+        char close_from = envShell ? ')' : '}';
+        char close_to   = envShell ? '}' : ')';
+        char *ptr;
+        for (ptr = toPrint; (*ptr != '\0'); ++ptr) {
+            if ((*ptr == '$') && (*(ptr+1) == open_from)) {
+                ++ptr;
+                *ptr = open_to;
+                ptr = strchr(ptr, close_from);
+                if (ptr == NULL) {
+                    fprintf(stderr, 
+                            "Cannot find end of env variable in line=%s\n",
+                            toPrint);
+                    return RTI_FALSE;
+                }
+                *ptr = close_to;
+            }
+        }
+
     }
     /*
      * Now the toPrint string should always have a space at the end, remove it
@@ -927,7 +950,6 @@ char * parseStringInQuotes(char *line,
 }
 
 /* }}} */
-
 /* {{{ processArchDefinitionLine
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * Parses the architecture definition line.
@@ -1758,7 +1780,8 @@ int main(int argc, char **argv) {
         };
         if (printCompositeFlagsProperties(archTarget,
                     FLAGS,
-                    argExpandEnvVar) == RTI_FALSE) {
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1773,7 +1796,8 @@ int main(int argc, char **argv) {
         };
         if (printCompositeFlagsProperties(archTarget,
                     FLAGS,
-                    argExpandEnvVar) == RTI_FALSE) {
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1785,7 +1809,8 @@ int main(int argc, char **argv) {
         };
         if (printCompositeFlagsProperties(archTarget,
                     FLAGS,
-                    argExpandEnvVar) == RTI_FALSE) {
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1797,7 +1822,8 @@ int main(int argc, char **argv) {
         };
         if (printCompositeFlagsProperties(archTarget,
                     FLAGS,
-                    argExpandEnvVar) == RTI_FALSE) {
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1811,7 +1837,8 @@ int main(int argc, char **argv) {
         };
         if (printCompositeFlagsProperties(archTarget,
                     FLAGS,
-                    argExpandEnvVar) == RTI_FALSE) {
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1825,7 +1852,8 @@ int main(int argc, char **argv) {
         };
         if (printCompositeFlagsProperties(archTarget,
                     FLAGS,
-                    argExpandEnvVar) == RTI_FALSE) {
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
