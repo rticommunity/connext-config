@@ -34,6 +34,7 @@
  *      -Wall -I$(ANDROID_NDK_PATH)/platforms/... -I${NDDSHOME}/include/ndds
  *               ^^^^^^^^^^^^^^^^^^
  *               Here we need to replace to ${...}
+ *
  */
 
 
@@ -50,9 +51,16 @@
 
 #include <unistd.h>
 #include <limits.h>
-#include <assert.h>
 
 #include <ndds/reda/reda_inlineList.h>
+
+/* Define the following macro to use getcwd to retrieve the current
+ * working directory using getcwd().
+ * If unset, it will use genenv("CWD")
+ * NOTE: getenv("CWD") might not work when running inside a containers
+ *       or a reduced shell.
+ */
+#define USE_GEWCWD
 
 #define APPLICATION_NAME                        "connext-config"
 #define APPLICATION_VERSION                     "1.0.0"
@@ -281,33 +289,48 @@ static char *calcNDDSHOME(const char *argv0) {
         goto err;
     }
 
-    // Check if $NDDSHOME is defined
+    /* Check if $NDDSHOME is defined */
     tmp = getenv("NDDSHOME");
     if (tmp) {
         strncpy(retVal, tmp, PATH_MAX);
         return retVal;
     }
 
-    // Else, obtain NDDSHOME from argv0
+    /* Else, obtain NDDSHOME from argv0 */
     if (argv0[0] == '/') {
-        // argv0 is absolute path
+        /* argv0 is absolute path */
         strncpy(retVal, argv0, PATH_MAX);
     } else {
-        // argv0 is a relative path, build the absolute path by looking at the current working directory
-        // TODO: Re-enable the use of getcwd as PWD might not be defined when running in a docker container
         char *appPath;
-        // Build the absolute path to this scripb from the current working directory
-        snprintf(retVal, PATH_MAX, "%s/%s", getenv("PWD"), argv0);
         /*
-        if (!getcwd(cwd, PATH_MAX)) {
-            printf("Error: failed to read current working directory while attempting to locate the platform.vm file\n");
-            printf("Try re-running with NDDSHOME environment variable defined\n");
-            retCode = APPLICATION_EXIT_FAILURE;
-            goto done;
+         * argv0 is a relative path, build the absolute path by looking at 
+         * the current working directory
+         */
+#ifdef USE_GEWCWD
+        int wr;
+        if (getcwd(retVal, PATH_MAX) == NULL) {
+            fprintf(stderr,
+                    "Error: failed to read current working directory: "
+                    "%s (errno=%d)\n",
+                    strerror(errno),
+                    errno);
+            goto err;
         }
-        strncat(cwd, "/", PATH_MAX-strlen(cwd));
-        strncat(cwd, argv0, PATH_MAX-strlen(cwd));
-        */
+        wr = strlen(retVal);
+        retVal[wr++] = '/';
+        strncpy(&retVal[wr], argv0, PATH_MAX-wr);
+#else
+        char *pwd = getenv("PWD");
+        /* Build the absolute path to this scripb from the current working directory */
+        if (pwd == NULL) {
+            fprintf(stderr,
+                    "Error: env variable PWD is not defined, "
+                    "unable to calculate NDDSHOME\n");
+            goto err;
+        }
+        printf(">>>>> PWD=%s\n", pwd);
+        snprintf(retVal, PATH_MAX, "%s/%s", pwd, argv0);
+#endif
         appPath = realpath(retVal, NULL);
         if (appPath == NULL) {
             fprintf(stderr, 
@@ -372,7 +395,7 @@ static RTIBool validateNDDSHOME(const char *NDDSHOME) {
                     "Unable to identify NDDSHOME.\n");
             goto err;
         }
-        // else is another error
+        /* else is another error */
         fprintf(stderr, 
                 "Error retrieving information about resource dir: '%s': %s (errno=%d)\n",
                 path,
@@ -476,10 +499,10 @@ static void dumpArch(struct REDAInlineList *list) {
 static struct ArchParameter * archGetParam(struct Architecture *arch, const char *key) {
     struct REDAInlineListNode *paramNode;
     for (paramNode = REDAInlineList_getFirst(&arch->paramList);
-            paramNode;
+            paramNode != NULL;
             paramNode = REDAInlineListNode_getNext(paramNode)) {
         struct ArchParameter *param = (struct ArchParameter *)paramNode;
-        if (!strcmp(param->key, key)) {
+        if (strcmp(param->key, key) == 0) {
             return param;
         }
     }
@@ -554,8 +577,8 @@ static char * unescapeString(char *in) {
  */
 static int arrayFind(const char **arr, const char *val) {
     int i = 0;
-    while (arr[i]) {
-        if (!strcmp(arr[i], val)) {
+    while (arr[i] != NULL) {
+        if (strcmp(arr[i], val) == 0) {
             return i;
         }
         ++i;
@@ -585,8 +608,8 @@ static int arrayFind(const char **arr, const char *val) {
 static char * expandEnvVar(const char *inStr) {
     static char retVal[MAX_CMDLINEARG_SIZE];
     char varName[MAX_STRING_SIZE];
-    size_t wr = 0;     // write pos
-    size_t rd;         // read pos
+    size_t wr = 0;     /* write pos */
+    size_t rd;         /* read pos */
 
     memset(retVal, 0, sizeof(retVal));
 
@@ -662,7 +685,7 @@ RTIBool printStringProperty(struct Architecture *arch,
         if (expandVar) {
             toPrint = expandEnvVar(toPrint);
             if (toPrint == NULL) {
-                // Error message has been already printed in expandEnvVar
+                /* Error message has been already printed in expandEnvVar */
                 return RTI_FALSE;
             }
         }
@@ -781,7 +804,7 @@ RTIBool printCompositeFlagsProperties(struct Architecture *arch,
             /* In the template files, the "$INCLUDES" values need to be prefixed 
              * by '-I', all the other flags need to be prefixed by a "-"
              */
-            prefix = (!strcmp(propName, "$INCLUDES")) ? "-I" : "-";
+            prefix = (strcmp(propName, "$INCLUDES") == 0) ? "-I" : "-";
             rc = joinStringArrayProperties(arch, 
                     &line[wr], 
                     MAX_CMDLINEARG_SIZE-wr, 
@@ -812,9 +835,11 @@ RTIBool printCompositeFlagsProperties(struct Architecture *arch,
             return RTI_FALSE;
         }
     }
-    // Now the toPrint string should always have a space at the end, remove it
-    // (this is needed so we can use the dump-all.sh script to compare the results
-    // with the javascript version)
+    /*
+     * Now the toPrint string should always have a space at the end, remove it
+     * (this is needed so we can use the dump-all.sh script to compare the results
+     * with the javascript version)
+     */
     wr = strlen(toPrint)-1;
     while(isspace(toPrint[wr])) {
         toPrint[wr--] = '\0';
@@ -879,9 +904,9 @@ char * parseStringInQuotes(char *line,
         }
         ++tmp1;
     }
-    if (!tmp1) {
+    if (tmp1 == NULL) {
         tmp1 = strchr(line, '\'');
-        if (!tmp1) {
+        if (tmp1 == NULL) {
             *errOut = "Failed to find the beginning of string delimiter";
             return NULL;
         }
@@ -889,7 +914,7 @@ char * parseStringInQuotes(char *line,
     ++tmp1;
 
     tmp2 = strchr(tmp1, endl);
-    if (!tmp2) {
+    if (tmp2 == NULL) {
         *errOut = "Failed to find the end of string delimiter";
         return NULL;
     }
@@ -903,24 +928,41 @@ char * parseStringInQuotes(char *line,
 
 /* }}} */
 
-// {{{ processArchDefinitionLine
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Returns 0 if failed, 1 if success
-// Line has the following form:
-//      #arch("i86Sol2.9","gcc3.3.2", {
-// or (because of a bug in the platform file):
-//
-//      #arch("armv7Linux3.0","gcc4.6.1.cortex-a9" {
-// Identify the two strings and copy them inside 'target', and 'compiler' 
-// (each one of max length MAX_STRING_SIZE)
-RTIBool processArchDefinitionLine(const char *line, char *target, char *compiler) {
+/* {{{ processArchDefinitionLine
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Parses the architecture definition line.
+ *
+ * The line has the following form:
+ *      #arch("i86Sol2.9","gcc3.3.2", {
+ * or (because of an error in the platform file):
+ *      #arch("armv7Linux3.0","gcc4.6.1.cortex-a9" {
+ *
+ * The approach here is to search and identify the two strings and copy them 
+ * inside 'target', and 'compiler', instead of looking for the commas.
+ *
+ * Each target and compiler must be MAX_STRING_SIZE in size.
+ *
+ * NOTE: This function assumes the target and compiler are enclosed
+ *       in double quotes (not single quote).
+ *
+ * \param target    pointer to the string where the "target" platform is
+ *                  copied. Must be at least MAX_STRING_SIZE.
+ * \param compiler  pointer to the string where the compiler name is 
+ *                  copied. Must be at least MAX_STRING_SIZE.
+ * \return          RTI_TRUE if success, RTI_FALSE if an error occurred
+ *                  (error message is printed to stderr)
+ *
+ */
+RTIBool processArchDefinitionLine(const char *line, 
+        char *target, 
+        char *compiler) {
     char *tmp1;
     char *tmp2;
 
     memset(target, 0, MAX_STRING_SIZE);
     memset(compiler, 0, MAX_STRING_SIZE);
     tmp1 = strchr(line, '"');
-    if (!tmp1) {
+    if (tmp1 == NULL) {
         fprintf(stderr, "Cannot find start target in arch definition: '%s'\n", 
                 line);
         return RTI_FALSE;
@@ -928,7 +970,7 @@ RTIBool processArchDefinitionLine(const char *line, char *target, char *compiler
     ++tmp1;
 
     tmp2 = strchr(tmp1, '"');
-    if (!tmp2) {
+    if (tmp2 == NULL) {
         fprintf(stderr, "Cannot find end target in arch definition: '%s'\n", 
                 line);
         return RTI_FALSE;
@@ -946,9 +988,9 @@ RTIBool processArchDefinitionLine(const char *line, char *target, char *compiler
     }
     memcpy(&target[0], tmp1, (tmp2-tmp1));
 
-    // Now parse and copy the compiler arch
+    /* Now parse and copy the compiler arch */
     tmp1 = strchr(tmp2+1, '"');
-    if (!tmp1) {
+    if (tmp1 == NULL) {
         fprintf(stderr, "Cannot find start compiler in arch definition: '%s'\n", 
                 line);
         return RTI_FALSE;
@@ -956,17 +998,21 @@ RTIBool processArchDefinitionLine(const char *line, char *target, char *compiler
     ++tmp1;
 
     tmp2 = strchr(tmp1, '"');
-    if (!tmp2) {
+    if (tmp2 == NULL) {
         fprintf(stderr, "Cannot find end compiler in arch definition: '%s'\n", 
                 line);
         return RTI_FALSE;
     }
 
-    // Some targets have an empty compiler name
+    /* Some targets have an empty compiler name */
     if (tmp2 > tmp1) {
         if (tmp2-tmp1 > MAX_STRING_SIZE) {
-            fprintf(stderr, "Compiler name '%s' too large: (%ld, max=%d) for target='%s'\n", 
-                    tmp1, (tmp2-tmp1), MAX_STRING_SIZE, target);
+            fprintf(stderr, 
+                    "Compiler name '%s' too large: (%ld, max=%d) for target='%s'\n", 
+                    tmp1, 
+                    (tmp2-tmp1), 
+                    MAX_STRING_SIZE, 
+                    target);
             return RTI_FALSE;
         }
         memcpy(&compiler[0], tmp1, (tmp2-tmp1));
@@ -974,36 +1020,46 @@ RTIBool processArchDefinitionLine(const char *line, char *target, char *compiler
     return RTI_TRUE;
 }
 
-// }}}
-// {{{ processKeyValuePairLine
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Returns 0 if failed, 1 if success
-//
-// Line has the following form:
-// "      KEY: <value>
-// Notes:
-// - The number of heading space is not fixed
-// - Key _usually_ starts with '$', but there are some variables: "TR_VAR": "..."
+/* }}} */
+/* {{{ processKeyValuePairLine
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Parses a key-value pair line with the following form:
+ * "      KEY: <value> "
+ * Notes:
+ * - The number of heading space is not fixed
+ * - Key _usually_ starts with '$', but there are some variables: "TR_VAR": "..."
+ *
+ * The approach is to split the line at the ':' point, then trim the
+ * key and the value, finally copy it in the param argument.
+ * 
+ * NOTE: This function modify the 'line' buffer
+ *
+ * \param line      pointer to the line to parse
+ * \param param     pointer to the ArchParameter object used to stored the
+ *                  parsed key and value.
+ * \return          RTI_TRUE if success, RTI_FALSE if an error occurred
+ */
 RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
     char *key;
     char *val;
     char *tmp;
 
     memset(param, 0, sizeof(*param));
-    tmp = strchr(line, ':');   // find the ':' delimiter
-    if (!tmp) {
-        fprintf(stderr, "Cannot find key-value pair delimiter ':' in line: '%s'\n", 
+    tmp = strchr(line, ':');   /* find the ':' delimiter */
+    if (tmp == NULL) {
+        fprintf(stderr, 
+                "Cannot find key-value pair delimiter ':' in line: '%s'\n", 
                 line);
         return RTI_FALSE;
     }
-    val = tmp+1;
+    val = tmp+1;    /* Skip the ':' */
 
-    // Trim the end of the key
+    /* Trim the end of the key */
     do {
         *tmp = '\0'; --tmp;
     } while (isspace(*tmp) || (*tmp == '"'));
 
-    // Trim the beginning of the key
+    /* Trim the beginning of the key */
     key = line;
     while(isspace(*key) || (*key=='"')) {
         ++key;
@@ -1011,43 +1067,49 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
 
     if (strlen(key) > sizeof(param->key)) {
         fprintf(stderr, "Key too long: '%s' (>%ld)\n",
-                key, sizeof(param->key));
+                key, 
+                sizeof(param->key));
         return RTI_FALSE;
     }
 
     strcpy(param->key, key);
 
-    // Trim the beginning of the value
+    /* Trim the beginning of the value */
     while(isspace(*val)) ++val;
 
-    // Identify the kind of value
-    if (!strncmp(val, "true", 4)) {
+    /* Identify the kind of value */
+    if (strncmp(val, "true", 4) == 0) {
+        /* Booleans are "true" ... */
         param->valueType = APVT_Boolean;
         param->value.as_bool = 1;
         return RTI_TRUE;
     }
-    if (!strncmp(val, "false", 5)) {
+    if (strncmp(val, "false", 5) == 0) {
+        /* ...or "false" */
         param->valueType = APVT_Boolean;
         param->value.as_bool = 0;
         return RTI_TRUE;
     }
     if ((*val == '"') || (*val == '\'')) {
+        /* Strings are in single or double quotes */
         const char *errMsg;
         param->valueType = APVT_String;
         val = parseStringInQuotes(val, 
                 &param->value.as_string[0], 
                 sizeof(param->value.as_string), 
                 &errMsg);
-        if (!val) {
-            fprintf(stderr, "Error: %s while parsing key-value pair line: '%s'\n",
-                    errMsg, line);
+        if (val == NULL) {
+            fprintf(stderr,
+                    "Error: %s while parsing key-value pair line: '%s'\n",
+                    errMsg, 
+                    line);
             return RTI_FALSE;
         }
         return RTI_TRUE;
     }
 
     if (*val == '[') {
-        // Value is an array
+        /* Value is an array of strings enclosed in single or double quotes */
         size_t idx = 0;
         const char *errMsg;
         param->valueType = APVT_ArrayOfStrings;
@@ -1057,8 +1119,10 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
                     MAX_STRING_SIZE,
                     &errMsg);
             if (val == NULL) {
-                fprintf(stderr, "Error: %s while parsing key-value pair line: '%s'\n",
-                        errMsg, line);
+                fprintf(stderr,
+                        "Error: %s while parsing key-value pair line: '%s'\n",
+                        errMsg, 
+                        line);
                 return RTI_FALSE;
             }
             ++val;
@@ -1068,23 +1132,26 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
         return RTI_TRUE;
     }
     if (*val == '$') {
-        // Value is an env variable
+        /* Values starting with a '$' are env variable */
         param->valueType = APVT_EnvVariable;
         tmp = strchr(val, ',');
-        if (!tmp) {
-            fprintf(stderr, "Unable to find end of env variable delimiter in line '%s'\n",
+        if (tmp == NULL) {
+            fprintf(stderr,
+                    "Unable to find end of env variable delimiter in line '%s'\n",
                     line);
             return RTI_FALSE;
         }
         *tmp = '\0';
+
         /* When taking the env variable, skip the variable name.
          * For example, in the following:
          *      $CPU : $CPU.ppcbe
          * the value.as_string will get the value "ppcbe"
          */
         tmp = strchr(val, '.');
-        if (!tmp) {
-            fprintf(stderr, "Unable to find '.' delimiter of env variable in line '%s'\n",
+        if (tmp == NULL) {
+            fprintf(stderr,
+                    "Unable to find '.' delimiter of env variable in line '%s'\n",
                     line);
             return RTI_FALSE;
         }
@@ -1094,15 +1161,24 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
         return RTI_TRUE;
     }
 
-
     return RTI_TRUE;
 }
 
-// }}}
-// {{{ readPlatformFile
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Returns 0 if failed, 1 if success
-RTIBool readPlatformFile(const char *filePath, struct REDAInlineList *archDef) {
+/* }}} */
+/* {{{ readPlatformFile
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Top-level function that parses the platform file and populates the
+ * archDef list
+ *
+ * This parser read and parse one line at the time. It uses a simple state
+ * machine to track the state of the parser when processing a line.
+ *
+ * \param filePath      pointer to the full path of the platform file
+ * \param archDef       pointer to the list where to store the parsed arches
+ * \return              RTI_TRUE if success, RTI_FALSE if an error occurred
+ */
+RTIBool readPlatformFile(const char *filePath, 
+        struct REDAInlineList *archDef) {
     RTIBool ok = RTI_FALSE;
     FILE *fp;
     char *line = NULL;
@@ -1114,12 +1190,12 @@ RTIBool readPlatformFile(const char *filePath, struct REDAInlineList *archDef) {
     char *trimLine;
     char target[MAX_STRING_SIZE];
     char compiler[MAX_STRING_SIZE];
-    int longComment = 0;
+    RTIBool longComment = RTI_FALSE;
     char *tmp;
-    int lineCount = 0;
+    unsigned int lineCount = 0;
 
     fp = fopen(filePath, "r");
-    if (!fp) {
+    if (fp == NULL) {
         fprintf(stderr, "Platform file not found: %s\n", filePath);
         return RTI_FALSE;
     }
@@ -1127,119 +1203,166 @@ RTIBool readPlatformFile(const char *filePath, struct REDAInlineList *archDef) {
     while (getline(&line, &lineLen, fp) != -1) {
         ++lineCount;
 
-        // Identify multi-line comments
+        /* Identify multi-line comments */
         if ((tmp = strstr(line, "#*")) != NULL) {
             *tmp = '\0';
-            longComment = 1;
+            longComment = RTI_TRUE;
         }
 
         trimLine = line;
         if (longComment && ((tmp = strstr(trimLine, "*#")) != NULL)) {
-            longComment = 0;
+            longComment = RTI_FALSE;
             trimLine = tmp+2;
         }
 
-        // Trim read line and remove the newline at the end
+        /*
+         * HACK: In Connext 5.3.0 the first line is:
+         *     "F## $Id$"
+         * skip it...
+         */
+        if (strncmp(trimLine, "F## ", 4) == 0) {
+            continue;
+        }
+
+        /*
+         * Skip single-line comments
+         * For example:
+         *      ## (c) Copyright, Real-Time Innovations, Inc. 2001...
+         *      ## ....
+         */
+        if ( (tmp = strstr(trimLine, "##")) != NULL) {
+            *tmp = '\0';
+        }
+
+        /* 
+         * HACK: In the code there are some lines like the following:
+         *      #    $C_LINKER_FLAGS : ["std=libc++"],
+         * It's unknown why they are there, but they need to be skipped...
+         */
+        if (strncmp(trimLine, "#    ", 5) == 0) {
+            continue;
+        }
+
+        /* Trim read line and remove the newline at the end */
         nRead = strlen(trimLine);
         while (isspace(trimLine[nRead])) {
             trimLine[nRead--] = '\0';
         }
         while (isspace(*trimLine)) ++trimLine;
 
-        // Skip empty lines
+        /* Skip empty lines */
         if (trimLine[0] == '\0') {
             continue;
         }
 
-
-        // TOP LEVEL - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+        /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+         * FSM State: TOP LEVEL
+         * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
         if (rsm == RSM_TOPLEVEL) {
-                
-            // Identify directives (#macro, #arch) first
+            /* Identify directives (#macro, #arch) first */
 
-            // Detect macro section
-            // Example:
-            //      #macro (arch $name $compiler $params)
-            if (!strncmp(trimLine, "#macro", 6)) {
+            /*
+             * Detect macro section
+             * Example:
+             *      #macro (arch $name $compiler $params)
+             */
+            if (strncmp(trimLine, "#macro", 6) == 0) {
                 rsm = RSM_MACRO;
                 continue;
             }
 
-            // Detect arch section
-            // Example:
-            //      #arch("sparc64Sol2.10","gcc3.4.2", {
-            if (!strncmp(trimLine, "#arch(", 6)) {
-                assert(currentArch == NULL);
+            if (strncmp(trimLine, "#set", 4) == 0) {
+                // Skip the #set command
+                // NOTE: currently we just skip the line since
+                //       this command is not used.
+                continue;
+            }
 
+            /* Detect arch section
+             * Example:
+             *      #arch("sparc64Sol2.10","gcc3.4.2", {
+             */
+            if (strncmp(trimLine, "#arch(", 6) == 0) {
                 currentArch = Architecture_new();
                 if (currentArch == NULL) {
-                    fprintf(stderr, "Out of memory allocating currentArch\n");
+                    fprintf(stderr,
+                            "Out of memory allocating currentArch\n");
                     goto done;
                 }
-                if (processArchDefinitionLine(trimLine, &target[0], &compiler[0]) == RTI_FALSE) {
+                if (processArchDefinitionLine(trimLine, 
+                            &target[0], 
+                            &compiler[0]) == RTI_FALSE) {
                     goto done;
                 }
-                if (strlen(target) + strlen(compiler) > MAX_STRING_SIZE) {
-                    fprintf(stderr, "Composite target string too long for platform: %s\n", trimLine);
+                if (snprintf(currentArch->target, 
+                        MAX_STRING_SIZE, 
+                        "%s%s", 
+                        target, 
+                        compiler) > MAX_STRING_SIZE) {
+                    fprintf(stderr, 
+                            "Composite target string too long for platform: "
+                            "%s\n", 
+                            trimLine);
                     goto done;
                 }
-                snprintf(currentArch->target, MAX_STRING_SIZE, "%s%s", target, compiler);
                 rsm = RSM_ARCH;
                 continue;
             }
 
-            // Skip comments
-            // From now on, comments are lines that starts with '#'. For example:
-            //      ## (c) Copyright, Real-Time Innovations, Inc. 2001.  All rights reserved.
-            //      #******************** LINUX ********************#
-            //      #    $C_LINKER_FLAGS : ["std=libc++"],
-            if (trimLine[0] == '#') {
-                continue;
-            }
-
-            // Unexpected
-            fprintf(stderr, "ERROR: unknown how to parse line: '%s'\n", trimLine);
+            /* Unexpected */
+            fprintf(stderr, 
+                    "ERROR: unknown how to parse line: '%s'\n", 
+                    trimLine);
             goto done;
         }
 
-        // MACRO - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+        /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+         * FSM State: MACRO
+         * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
         if (rsm == RSM_MACRO) {
-            // In macro state, we ignore everything until the #end symbol
-            if (!strncmp(trimLine, "#end", 4)) {
+            /* In macro state, ignore everything until the #end symbol */
+            if (strncmp(trimLine, "#end", 4) == 0) {
                 rsm = RSM_TOPLEVEL;
             }
             continue;
         }
 
-        // ARCH  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+        /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+         * FSM State: ARCH (inside an Architecture definition)
+         * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
         if (rsm == RSM_ARCH) {
-            // Exit ARCH after we detect the '})\n' pattern
-            if (!strncmp(trimLine, "})\n", 3)) {
+            /* Exit ARCH after we detect the '})\n' pattern */
+            if (strncmp(trimLine, "})\n", 3) == 0) {
 
-                // Filter out the architectures that need to be skipped:
-                //  - $HIDDEN=true
-                //  - All windows targets
-                //  - All the iOS targets
-                // In general remove all the architectures that don't define 
-                // the macros for the toolset (C_COMPILER, C_LINKER, ...)
+                /* Filter out the architectures that need to be skipped:
+                 *  - $HIDDEN=true
+                 *  - All windows targets
+                 *  - All the iOS targets
+                 * In general remove all the architectures that don't define 
+                 * the macros for the toolset (C_COMPILER, C_LINKER, ...)
+                 */
                 int skipArch = 0;
-                struct ArchParameter * hidden = archGetParam(currentArch, "$HIDDEN");
-                if (hidden && ((hidden->valueType == APVT_Boolean) && hidden->value.as_bool)) {
+                struct ArchParameter * hidden = archGetParam(currentArch, 
+                        "$HIDDEN");
+                if (hidden && 
+                        ((hidden->valueType == APVT_Boolean) && 
+                            hidden->value.as_bool)) {
                     skipArch = 1;
                 }
-                if (!archGetParam(currentArch, "$C_COMPILER") ||
-                        !archGetParam(currentArch, "$C_LINKER") ||
-                        !archGetParam(currentArch, "$CXX_COMPILER") ||
-                        !archGetParam(currentArch, "$CXX_LINKER")) {
+                if ((archGetParam(currentArch, "$C_COMPILER") == NULL) ||
+                        (archGetParam(currentArch, "$C_LINKER") == NULL) ||
+                        (archGetParam(currentArch, "$CXX_COMPILER") == NULL) ||
+                        (archGetParam(currentArch, "$CXX_LINKER") == NULL)) {
                     skipArch = 1;
                 }
 
                 if (skipArch) {
-                    // Drop skipped architectures
+                    /* Drop skipped architectures */
                     Architecture_delete(currentArch);
                 } else {
-                    // Valid, push the arch to the archDef
-                    REDAInlineList_addNodeToBackEA(archDef, &currentArch->parent);
+                    /* Valid, push the arch to the archDef */
+                    REDAInlineList_addNodeToBackEA(archDef, 
+                            &currentArch->parent);
                 }
 
                 currentArch = NULL;
@@ -1247,18 +1370,19 @@ RTIBool readPlatformFile(const char *filePath, struct REDAInlineList *archDef) {
                 continue;
             }
 
-            // process the arch line
-            assert(currentParam == NULL);
+            /* process the arch line */
             currentParam = ArchParameter_new();
-            if (!currentParam) {
+            if (currentParam == NULL) {
                 fprintf(stderr, "Out of memory allocating currentParam\n");
                 goto done;
             }
-            if (!processKeyValuePairLine(trimLine, currentParam)) {
+            if (processKeyValuePairLine(trimLine, currentParam) == RTI_FALSE) {
                 goto done;
             }
-            // Got a valid line:
-            REDAInlineList_addNodeToBackEA(&currentArch->paramList, &currentParam->parent);
+
+            /* Got a valid line: */
+            REDAInlineList_addNodeToBackEA(&currentArch->paramList, 
+                    &currentParam->parent);
             currentParam = NULL;
             continue;
         }
@@ -1269,36 +1393,44 @@ RTIBool readPlatformFile(const char *filePath, struct REDAInlineList *archDef) {
     ok = RTI_TRUE;
 
 done:
-    if (fp) {
+    if (fp != NULL) {
         fclose(fp);
     }
-    if (line) {
+    if (line != NULL) {
         free(line);
     }
-    if (currentArch) {
+    if (currentArch != NULL) {
         Architecture_delete(currentArch);
     }
-    if (currentParam) {
+    if (currentParam != NULL) {
         ArchParameter_delete(currentParam);
     }
-    if (!ok) {
-        fprintf(stderr, "Error occurred while parsing line %d\n", lineCount);
+    if (ok == RTI_FALSE) {
+        fprintf(stderr, 
+                "Error occurred while parsing line %u\n", 
+                lineCount);
     }
     return ok;
 }
-// }}}
-
-// {{{ usage
-// -----------------------------------------------------------------------------
+/* }}} */
+/* {{{ usage
+ * -----------------------------------------------------------------------------
+ */
 void usage() {
-    printf("RTI Connext DDS Config version %s\n", APPLICATION_VERSION); 
+    printf("RTI Connext DDS Config version %s\n", 
+            APPLICATION_VERSION); 
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
     printf("Usage:\n");
-    printf("    %s -h|--help    Show this help\n", APPLICATION_NAME);
-    printf("    %s -V|--version Prints version number\n", APPLICATION_NAME);
-    printf("    %s --list-all   List all platform architectures supported\n", APPLICATION_NAME);
-    printf("    %s --dump-all   Dump all platforms and all settings (testing only)\n", APPLICATION_NAME);
-    printf("    %s [modifiers] <what> <targetArch>\n", APPLICATION_NAME);
+    printf("    %s -h|--help    Show this help\n", 
+            APPLICATION_NAME);
+    printf("    %s -V|--version Prints version number\n", 
+            APPLICATION_NAME);
+    printf("    %s --list-all   List all platform architectures supported\n", 
+            APPLICATION_NAME);
+    printf("    %s --dump-all   Dump all platforms and all settings (testing only)\n", 
+            APPLICATION_NAME);
+    printf("    %s [modifiers] <what> <targetArch>\n", 
+            APPLICATION_NAME);
     printf("\n");
     printf("Where [modifiers] are:\n");
     printf("    --static    use static linking against RTI Connext DDS\n");
@@ -1324,9 +1456,10 @@ void usage() {
     printf("Use `--list-all` to output a list of supported architectures\n");
 }
 
-// }}}
-// {{{ main
-// -----------------------------------------------------------------------------
+/* }}} */
+/* {{{ main
+ * -----------------------------------------------------------------------------
+ */
 int main(int argc, char **argv) {
     const char *argOp = NULL;
     const char *argTarget = NULL;
@@ -1349,25 +1482,27 @@ int main(int argc, char **argv) {
         retCode = APPLICATION_EXIT_INVALID_ARGS;
         goto done;
     }
-    if ((argc == 2) && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
+    if ((argc == 2) && ((strcmp(argv[1], "-h") == 0) ||
+                (strcmp(argv[1], "--help") == 0) )) {
         usage();
         retCode = APPLICATION_EXIT_SUCCESS;
         goto done;
     }
-    if ((argc == 2) && (!strcmp(argv[1], "-V") || !strcmp(argv[1], "--version"))) {
+    if ((argc == 2) && ((strcmp(argv[1], "-V") == 0) ||
+                (strcmp(argv[1], "--version") == 0))) {
         printf("%s v.%s\n", APPLICATION_NAME, APPLICATION_VERSION);
         retCode = APPLICATION_EXIT_SUCCESS;
         goto done;
     }
     if ((argc == 2) && (
-                !strcmp(argv[1], "--list-all") || 
-                !strcmp(argv[1], "--dump-all"))) {
+                (strcmp(argv[1], "--list-all") == 0) || 
+                (strcmp(argv[1], "--dump-all") == 0))) {
         argOp = argv[1];
 
     } else {
         int i;
 
-        // Parse command line with at least 2 arguments
+        /* Parse command line with at least 2 arguments */
         if (argc < 3) {
             usage();
             retCode = APPLICATION_EXIT_INVALID_ARGS;
@@ -1375,23 +1510,25 @@ int main(int argc, char **argv) {
         }
 
         for (i = 1; i < argc-1; ++i) {
-            if (!strcmp(argv[i], "--static")) {
+            if ((strcmp(argv[i], "--static") == 0)) {
                 argStatic = RTI_TRUE;
                 continue;
             }
-            if (!strcmp(argv[i], "--debug")) {
+            if ((strcmp(argv[i], "--debug") == 0)) {
                 argDebug = RTI_TRUE;
                 continue;
             }
-            if (!strcmp(argv[i], "--shell") || !strcmp(argv[i], "--sh")) {
+            if ((strcmp(argv[i], "--shell") == 0) || 
+                    (strcmp(argv[i], "--sh") == 0)) {
                 argShell = RTI_TRUE;
                 continue;
             }
-            if (!strcmp(argv[i], "--noexpand")) {
+            if ((strcmp(argv[i], "--noexpand") == 0)) {
                 argExpandEnvVar = RTI_FALSE;
                 continue;
             }
-            if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            if ((strcmp(argv[i], "-h") == 0) || 
+                    (strcmp(argv[i], "--help") == 0)) {
                 usage();
                 retCode = APPLICATION_EXIT_SUCCESS;
                 goto done;
@@ -1406,35 +1543,38 @@ int main(int argc, char **argv) {
             goto done;
         }
         argTarget = argv[argc-1];
-        // Make sure the last argument is as intended the target
-        if (!strcmp(argTarget, "-h") || !strcmp(argTarget, "--help")) {
+        /* Make sure the last argument is as intended the target */
+        if ((strcmp(argTarget, "-h") == 0) || 
+                (strcmp(argTarget, "--help") == 0)) {
             usage();
             retCode = APPLICATION_EXIT_SUCCESS;
             goto done;
         }
-        if (!strncmp(argTarget, "--", 2)) {
+        if (strncmp(argTarget, "--", 2) == 0) {
             usage();
-            fprintf(stderr, "Error: missing target architecture\n");
-            fprintf(stderr, "Use --list-all to print all the supported architectures\n");
+            fprintf(stderr, 
+                    "Error: missing target architecture\n");
+            fprintf(stderr, 
+                    "Use --list-all to print all the supported architectures\n");
             retCode = APPLICATION_EXIT_INVALID_ARGS;
             goto done;
         }
     }
 
-    // Determine NDDSHOME and platform file
+    /* Determine NDDSHOME and platform file */
     NDDSHOME = calcNDDSHOME(argv[0]);
     if (NDDSHOME == NULL) {
         retCode = APPLICATION_EXIT_FAILURE;
         goto done;
     }
-    if (!validateNDDSHOME(NDDSHOME)) {
+    if (validateNDDSHOME(NDDSHOME) == RTI_FALSE) {
         retCode = APPLICATION_EXIT_FAILURE;
         goto done;
     }
 
-    // Complete building the path to the platform.vm file:
+    /* Complete building the path to the platform.vm file: */
     platformFile = calloc(PATH_MAX+1, 1);
-    if (!platformFile) {
+    if (platformFile == NULL) {
         fprintf(stderr, "Out of memory allocating platformFile path\n");
         retCode = APPLICATION_EXIT_FAILURE;
         goto done;
@@ -1450,15 +1590,15 @@ int main(int argc, char **argv) {
     }
     REDAInlineList_init(archDef);
 
-    // Read and parse platform file
+    /* Read and parse platform file */
     readPlatformFile(platformFile, archDef);
-    if (!strcmp(argOp, "--dump-all")) {
+    if ((strcmp(argOp, "--dump-all") == 0)) {
         dumpArch(archDef);
         retCode = APPLICATION_EXIT_SUCCESS;
         goto done;
     }
 
-    if (!strcmp(argOp, "--list-all")) {
+    if ((strcmp(argOp, "--list-all") == 0)) {
         struct REDAInlineListNode *archNode;
         for (archNode = REDAInlineList_getFirst(archDef); 
                 archNode; 
@@ -1470,27 +1610,30 @@ int main(int argc, char **argv) {
         goto done;
     }
 
-    // Find target
-    {
-        archTarget = NULL;
-        struct REDAInlineListNode *node;
-        for (node = REDAInlineList_getFirst(archDef); node; node = REDAInlineListNode_getNext(node)) {
-            struct Architecture *arch = (struct Architecture *)node;
-            if (!strcmp(arch->target, argTarget)) {
-                archTarget = arch;
-                break;
-            }
-        }
-        if (!archTarget) {
-            usage();
-            fprintf(stderr, "Error: requested architecture '%s' is not supported\n", argTarget);
-            fprintf(stderr, "Use --list-all to print all the supported architectures\n");
-            retCode = APPLICATION_EXIT_INVALID_ARGS;
-            goto done;
+    /* Find target */
+    archTarget = NULL;
+    struct REDAInlineListNode *node;
+    for (node = REDAInlineList_getFirst(archDef); 
+            node != NULL; 
+            node = REDAInlineListNode_getNext(node)) {
+        struct Architecture *arch = (struct Architecture *)node;
+        if ((strcmp(arch->target, argTarget) == 0)) {
+            archTarget = arch;
+            break;
         }
     }
+    if (archTarget == NULL) {
+        usage();
+        fprintf(stderr,
+                "Error: requested architecture '%s' is not supported\n",
+                argTarget);
+        fprintf(stderr,
+                "Use --list-all to print all the supported architectures\n");
+        retCode = APPLICATION_EXIT_INVALID_ARGS;
+        goto done;
+    }
 
-    // Compose the NDDS-related includes and libraries
+    /* Compose the NDDS-related includes and libraries */
     libSuffix = "";
     if (argStatic && !argDebug) {
         libSuffix = "z";
@@ -1502,7 +1645,7 @@ int main(int argc, char **argv) {
     nddsFlags = calloc(MAX_CMDLINEARG_SIZE+1, 1);
     nddsCLibs = calloc(MAX_CMDLINEARG_SIZE+1, 1);
     nddsCPPLibs = calloc(MAX_CMDLINEARG_SIZE+1, 1);
-    if (!nddsFlags || !nddsCLibs || !nddsCPPLibs) {
+    if ((nddsFlags == NULL) || (nddsCLibs == NULL) || (nddsCPPLibs == NULL)) {
         fprintf(stderr, "Out of memory allocating command-line arguments");
         retCode = APPLICATION_EXIT_FAILURE;
         goto done;
@@ -1510,51 +1653,102 @@ int main(int argc, char **argv) {
 
     if (argExpandEnvVar) {
         /* Expand NDDSHOME */
-        snprintf(nddsFlags, MAX_CMDLINEARG_SIZE, "-I%s/include -I%s/include/ndds", NDDSHOME, NDDSHOME);
-        snprintf(nddsCLibs, MAX_CMDLINEARG_SIZE, "-L%s/lib/%s -lnddsc%s -lnddscore%s", NDDSHOME, argTarget, libSuffix, libSuffix);
-        snprintf(nddsCPPLibs, MAX_CMDLINEARG_SIZE, "-L%s/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s", NDDSHOME, argTarget, libSuffix, libSuffix, libSuffix);
+        snprintf(nddsFlags,
+                MAX_CMDLINEARG_SIZE,
+                "-I%s/include -I%s/include/ndds",
+                NDDSHOME,
+                NDDSHOME);
+        snprintf(nddsCLibs,
+                MAX_CMDLINEARG_SIZE,
+                "-L%s/lib/%s -lnddsc%s -lnddscore%s",
+                NDDSHOME,
+                argTarget,
+                libSuffix,
+                libSuffix);
+        snprintf(nddsCPPLibs,
+                MAX_CMDLINEARG_SIZE,
+                "-L%s/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s",
+                NDDSHOME,
+                argTarget,
+                libSuffix,
+                libSuffix,
+                libSuffix);
     } else {
         /* Do not expand variables */
         if (argShell) {
-            // Use shell style
-            snprintf(nddsFlags, MAX_CMDLINEARG_SIZE, "-I${NDDSHOME}/include -I${NDDSHOME}/include/ndds");;
-            snprintf(nddsCLibs, MAX_CMDLINEARG_SIZE, "-L${NDDSHOME}/lib/%s -lnddsc%s -lnddscore%s", argTarget, libSuffix, libSuffix);
-            snprintf(nddsCPPLibs, MAX_CMDLINEARG_SIZE, "-L${NDDSHOME}/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s", argTarget, libSuffix, libSuffix, libSuffix);
+            /* Use shell style */
+            snprintf(nddsFlags,
+                    MAX_CMDLINEARG_SIZE,
+                    "-I${NDDSHOME}/include -I${NDDSHOME}/include/ndds");
+            snprintf(nddsCLibs,
+                    MAX_CMDLINEARG_SIZE,
+                    "-L${NDDSHOME}/lib/%s -lnddsc%s -lnddscore%s",
+                    argTarget,
+                    libSuffix,
+                    libSuffix);
+            snprintf(nddsCPPLibs,
+                    MAX_CMDLINEARG_SIZE,
+                    "-L${NDDSHOME}/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s",
+                    argTarget,
+                    libSuffix,
+                    libSuffix,
+                    libSuffix);
         } else {
-            // Use makefile style
-            snprintf(nddsFlags, MAX_CMDLINEARG_SIZE, "-I$(NDDSHOME)/include -I$(NDDSHOME)/include/ndds");
-            snprintf(nddsCLibs, MAX_CMDLINEARG_SIZE, "-L$(NDDSHOME)/lib/%s -lnddsc%s -lnddscore%s", argTarget, libSuffix, libSuffix);
-            snprintf(nddsCPPLibs, MAX_CMDLINEARG_SIZE, "-L$(NDDSHOME)/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s", argTarget, libSuffix, libSuffix, libSuffix);
+            /* Use makefile style */
+            snprintf(nddsFlags,
+                    MAX_CMDLINEARG_SIZE,
+                    "-I$(NDDSHOME)/include -I$(NDDSHOME)/include/ndds");
+            snprintf(nddsCLibs,
+                    MAX_CMDLINEARG_SIZE,
+                    "-L$(NDDSHOME)/lib/%s -lnddsc%s -lnddscore%s",
+                    argTarget,
+                    libSuffix,
+                    libSuffix);
+            snprintf(nddsCPPLibs,
+                    MAX_CMDLINEARG_SIZE,
+                    "-L$(NDDSHOME)/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s",
+                    argTarget,
+                    libSuffix,
+                    libSuffix,
+                    libSuffix);
         }
     } 
 
-    // Process request operation
+    /* Process request operation */
     retCode = APPLICATION_EXIT_SUCCESS;
-    if (!strcmp(argOp, "--ccomp")) {
-        if (!printStringProperty(archTarget, "$C_COMPILER", argExpandEnvVar)) {
+    if ((strcmp(argOp, "--ccomp") == 0)) {
+        if (printStringProperty(archTarget, 
+                    "$C_COMPILER", 
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
-    } else if (!strcmp(argOp, "--clink")) {
-        if (!printStringProperty(archTarget, "$C_LINKER", argExpandEnvVar)) {
+    } else if ((strcmp(argOp, "--clink") == 0)) {
+        if (printStringProperty(archTarget,
+                    "$C_LINKER",
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
-    } else if (!strcmp(argOp, "--cxxcomp")) {
-        if (!printStringProperty(archTarget, "$CXX_COMPILER", argExpandEnvVar)) {
+    } else if ((strcmp(argOp, "--cxxcomp") == 0)) {
+        if (printStringProperty(archTarget,
+                    "$CXX_COMPILER",
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
-    } else if (!strcmp(argOp, "--cxxlink")) {
-        if (!printStringProperty(archTarget, "$CXX_LINKER", argExpandEnvVar)) {
+    } else if ((strcmp(argOp, "--cxxlink") == 0)) {
+        if (printStringProperty(archTarget,
+                    "$CXX_LINKER",
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
-    } else if (!strcmp(argOp, "--cflags")) {
+    } else if ((strcmp(argOp, "--cflags") == 0)) {
         const char *FLAGS[] = {
             "$C_COMPILER_FLAGS",
             "$DEFINES",
@@ -1562,12 +1756,14 @@ int main(int argc, char **argv) {
             nddsFlags,
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
-    } else if (!strcmp(argOp, "--cxxflags")) {
+    } else if ((strcmp(argOp, "--cxxflags") == 0)) {
         const char *FLAGS[] = {
             "$CXX_COMPILER_FLAGS",
             "$DEFINES",
@@ -1575,63 +1771,77 @@ int main(int argc, char **argv) {
             nddsFlags,
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
-    } else if (!strcmp(argOp, "--ldflags")) {
+    } else if ((strcmp(argOp, "--ldflags") == 0)) {
         const char *FLAGS[] = {
             "$C_LINKER_FLAGS",
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
-    } else if (!strcmp(argOp, "--ldxxflags")) {
+    } else if ((strcmp(argOp, "--ldxxflags") == 0)) {
         const char *FLAGS[] = {
             "$CXX_LINKER_FLAGS",
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
-    } else if (!strcmp(argOp, "--ldlibs")) {
+    } else if ((strcmp(argOp, "--ldlibs") == 0)) {
         const char *FLAGS[] = {
             nddsCLibs,
             "$SYSLIBS",
             "$C_SYSLIBS",
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
-    } else if (!strcmp(argOp, "--ldxxlibs")) {
+    } else if ((strcmp(argOp, "--ldxxlibs") == 0)) {
         const char *FLAGS[] = {
             nddsCPPLibs,
             "$SYSLIBS",
             "$CXX_SYSLIBS",
             NULL
         };
-        if (!printCompositeFlagsProperties(archTarget, FLAGS, argExpandEnvVar)) {
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
-    } else if (!strcmp(argOp, "--os")) {
-        if (!printStringProperty(archTarget, "$OS", argExpandEnvVar)) {
+    } else if ((strcmp(argOp, "--os") == 0)) {
+        if (printStringProperty(archTarget,
+                    "$OS",
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
 
-    } else if (!strcmp(argOp, "--platform")) {
-        if (!printStringProperty(archTarget, "$PLATFORM", argExpandEnvVar)) {
+    } else if ((strcmp(argOp, "--platform") == 0)) {
+        if (printStringProperty(archTarget,
+                    "$PLATFORM",
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1642,33 +1852,32 @@ int main(int argc, char **argv) {
     }
 
 done:
-    if (NDDSHOME) {
+    if (NDDSHOME != NULL) {
         free(NDDSHOME);
     }
-    if (platformFile) {
+    if (platformFile != NULL) {
         free(platformFile);
     }
     if (archDef) {
         struct REDAInlineListNode *next;
         struct REDAInlineListNode *node = REDAInlineList_getFirst(archDef);
-        while(node) {
+        while(node != NULL) {
             next = REDAInlineListNode_getNext(node);
             Architecture_delete((struct Architecture *)node);
             node = next;
         }
         free(archDef);
     }
-    if (nddsFlags) {
+    if (nddsFlags != NULL) {
         free(nddsFlags);
     }
-    if (nddsCLibs) {
+    if (nddsCLibs != NULL) {
         free(nddsCLibs);
     }
-    if (nddsCPPLibs) {
+    if (nddsCPPLibs != NULL) {
         free(nddsCPPLibs);
     }
     return retCode;
 }
-// }}}
-
+/* }}} */
 
