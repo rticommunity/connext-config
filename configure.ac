@@ -83,7 +83,10 @@ AC_ARG_WITH(rticonnextdds,
         if test "${withval}" = "yes"; then
             AC_MSG_ERROR(missing argument for --with-rticonnextdds parameter);
         else
-            NDDSHOME=`realpath "${withval}"`
+            NDDSHOME="${withval}"
+            [[[ ${NDDSHOME} != /* ]]] && NDDSHOME="`pwd`/${NDDSHOME#./}"
+            dnl Realpath is not available on Mac, otherwise this would do the job:
+            dnl NDDSHOME=`realpath "${withval}"`
         fi
 ],[
         AC_MSG_RESULT(Checking for NDDSHOME...)
