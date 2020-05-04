@@ -76,15 +76,15 @@ AC_ARG_WITH([rticonnextdds-static],
 
 
 dnl ****************************************************************************
-dnl --with-rticonnextdds-target
+dnl --enable-target
 dnl ****************************************************************************
-AC_ARG_WITH(rticonnextdds-target,
-[AC_HELP_STRING([--with-rticonnextdds-target],[specify the target architecture for RTI Connext DDS (required). Use 'connext-config --list-all' to view the supported targets])],
+AC_ARG_ENABLE(target,
+[AC_HELP_STRING([--enable-target],[specify the target architecture for RTI Connext DDS (required). Use 'connext-config --list-all' to view the supported targets])],
 [
-        if test "${withval}" = "yes"; then
+        if test "${enableval}" = "yes"; then
             AC_MSG_ERROR(missing argument for --with-rticonnextdds-target parameter);
         else
-            if test -z `connext-config --list-all | grep ${withval}`; then
+            if test -z `connext-config --list-all | grep ${enableval}`; then
                 AC_MSG_ERROR(invalid or unsupported target type);
             fi
             if test $? -ne 0; then
@@ -98,15 +98,15 @@ AC_ARG_WITH(rticonnextdds-target,
                 AC_MSG_RESULT(Using RTI ConnextDDS RELEASE libraries)
                 RTICFG_DEBUG=""
             fi
-            CC="`connext-config --ccomp ${withval}`"
-            LD="`connext-config --clink ${withval}`"
-            CFLAGS="$CFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --cflags ${withval}`"
-            LDFLAGS="`connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldflags ${withval}`"
-            LIBS="$LDFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldlibs ${withval}`"
+            CC="`connext-config --ccomp ${enableval}`"
+            LD="`connext-config --clink ${enableval}`"
+            CFLAGS="$CFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --cflags ${enableval}`"
+            LDFLAGS="`connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldflags ${enableval}`"
+            LIBS="$LDFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldlibs ${enableval}`"
         fi
-        AC_MSG_RESULT(Building for target ${withval} system)
+        AC_MSG_RESULT(Building for target ${enableval} system)
 ],[
-        AC_MSG_ERROR(you must specify --with-rticonnextdds-target with a valid target. See --help for more info)
+        AC_MSG_ERROR(you must specify --enable-target with a valid target. See --help for more info)
 ])
 
 
