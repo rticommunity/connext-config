@@ -469,6 +469,10 @@ static void dumpArch(struct REDAInlineList *list) {
                     printf("]\n");
                     break;
                 }
+
+                default:
+                    printf("** Error: unknow how to display type=%d\n",
+                            param->valueType);
             }
         }
     }
