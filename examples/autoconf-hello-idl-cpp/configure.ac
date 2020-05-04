@@ -47,7 +47,7 @@ AC_ARG_ENABLE(warnings,
         CFLAGS="$CFLAGS -W -Wimplicit-fallthrough=0"
 ])
 
-m4_include([m4/rticonnextdds.m4])
+m4_include([m4/rticonnextdds-cxx.m4])
 
 CXXFLAGS=$CFLAGS
 AC_SUBST(NDDSHOME)

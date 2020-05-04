@@ -11,12 +11,12 @@ noinst_HEADERS = Hello.h \
 		 HelloWorldSupport.h \
 		 HelloWorldPlugin.h
 
-Hello_SOURCES = Hello.cxx \
+Hello_SOURCES = HelloWorld.cxx \
+		HelloWorldSupport.cxx \
+		HelloWorldPlugin.cxx \
 		HelloPublisher.cxx \
 		HelloSubscriber.cxx \
-		HelloWorld.cxx \
-		HelloWorldSupport.cxx \
-		HelloWorldPlugin.cxx
+		Hello.cxx
 
 
 HelloWorld.cxx: HelloWorld.idl
