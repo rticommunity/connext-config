@@ -82,7 +82,7 @@ AC_ARG_WITH(rticonnextdds-target,
 [AC_HELP_STRING([--with-rticonnextdds-target],[specify the target architecture for RTI Connext DDS (required). Use 'connext-config --list-all' to view the supported targets])],
 [
         if test "${withval}" = "yes"; then
-            AC_MSG_ERROR(missing argument for --enable-target parameter);
+            AC_MSG_ERROR(missing argument for --with-rticonnextdds-target parameter);
         else
             if test -z `connext-config --list-all | grep ${withval}`; then
                 AC_MSG_ERROR(invalid or unsupported target type);
@@ -106,7 +106,7 @@ AC_ARG_WITH(rticonnextdds-target,
         fi
         AC_MSG_RESULT(Building for target ${withval} system)
 ],[
-        AC_MSG_ERROR(you must specify --enable-target with a valid target. See --help for more info)
+        AC_MSG_ERROR(you must specify --with-rticonnextdds-target with a valid target. See --help for more info)
 ])
 
 
