@@ -3,7 +3,7 @@ dnl * Copyright 2020 Real-Time Innovations, Inc.                               *
 dnl * Author: fabriziobertocci@gmail.com                                       *
 dnl ****************************************************************************
 
-AC_INIT(connext-config, 1.0, fabriziobertocci@gmail.com)
+AC_INIT(connext-config, 1.0.1, fabriziobertocci@gmail.com)
 AC_CONFIG_SRCDIR([src/connext-config.c])
 
 dnl subdir-objects tells Makefile to place object files in the same dir as sources.
