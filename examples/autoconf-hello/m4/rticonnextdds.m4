@@ -82,14 +82,14 @@ AC_ARG_ENABLE(target,
 [AC_HELP_STRING([--enable-target],[specify the target architecture for RTI Connext DDS (required). Use 'connext-config --list-all' to view the supported targets])],
 [
         if test "${enableval}" = "yes"; then
-            AC_MSG_ERROR(missing argument for --with-rticonnextdds-target parameter);
+            AC_MSG_ERROR(missing argument for --enable-target parameter);
         else
             NDDSARCH=${enableval}
         fi
         AC_MSG_RESULT(Building for target ${enableval} system)
 ],[
         if test "a${NDDSARCH}a" = "aa"; then
-            AC_MSG_ERROR(you must specify --enable-target with a valid target, or set NDDSARCH env variable)
+            AC_MSG_ERROR(you must specify --enable-target with a valid target or set NDDSARCH env variable)
         else
             AC_MSG_RESULT(Using target architecture from NDDSARCH: ${NDDSARCH})
         fi
