@@ -84,30 +84,36 @@ AC_ARG_ENABLE(target,
         if test "${enableval}" = "yes"; then
             AC_MSG_ERROR(missing argument for --with-rticonnextdds-target parameter);
         else
-            if test -z `connext-config --list-all | grep ${enableval}`; then
-                AC_MSG_ERROR(invalid or unsupported target type);
-            fi
-            if test $? -ne 0; then
-                AC_MSG_ERROR(error invoking connext-config, check log for details)
-            fi
-            AC_MSG_RESULT(Using connext-config to get compiler and linker settings...)
-            if test "$DEBUG_ENABLED" = 1; then
-                AC_MSG_RESULT(Using RTI ConnextDDS DEBUG libraries)
-                RTICFG_DEBUG="--debug"
-            else
-                AC_MSG_RESULT(Using RTI ConnextDDS RELEASE libraries)
-                RTICFG_DEBUG=""
-            fi
-            CC="`connext-config --cxxcomp ${enableval}`"
-            LD="`connext-config --cxxlink ${enableval}`"
-            CFLAGS="$CFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --cxxflags ${enableval}`"
-            LDFLAGS="`connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldxxflags ${enableval}`"
-            LIBS="$LDFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldxxlibs ${enableval}`"
+            NDDSARCH=${enableval}
         fi
         AC_MSG_RESULT(Building for target ${enableval} system)
 ],[
-        AC_MSG_ERROR(you must specify --with-rticonnextdds-target with a valid target. See --help for more info)
+        if test "a${NDDSARCH}a" = "aa"; then
+            AC_MSG_ERROR(you must specify --enable-target with a valid target, or set NDDSARCH env variable)
+        else
+            AC_MSG_RESULT(Using target architecture from NDDSARCH: ${NDDSARCH})
+        fi
 ])
 
+
+if test -z `connext-config --list-all | grep ${NDDSARCH}`; then
+    AC_MSG_ERROR(invalid or unsupported target type);
+fi
+if test $? -ne 0; then
+    AC_MSG_ERROR(error invoking connext-config, check log for details)
+fi
+AC_MSG_RESULT(Using connext-config to get compiler and linker settings...)
+if test "$DEBUG_ENABLED" = 1; then
+    AC_MSG_RESULT(Using RTI ConnextDDS DEBUG libraries)
+    RTICFG_DEBUG="--debug"
+else
+    AC_MSG_RESULT(Using RTI ConnextDDS RELEASE libraries)
+    RTICFG_DEBUG=""
+fi
+CC="`connext-config --cxxcomp ${NDDSARCH}`"
+LD="`connext-config --cxxlink ${NDDSARCH}`"
+CFLAGS="$CFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --cxxflags ${NDDSARCH}`"
+LDFLAGS="`connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldxxflags ${NDDSARCH}`"
+LIBS="$LDFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldxxlibs ${NDDSARCH}`"
 
 
