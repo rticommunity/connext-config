@@ -50,7 +50,7 @@ The tool can be invoked in two ways:
 
 In general, when determining the tools required to build a RTI Connext DDS application, you may need to use this tool 5 times. For example, to build a C program:
 
-* Use the `--ccom` to determine the correct C compiler to use
+* Use the `--ccomp` to determine the correct C compiler to use
 * Use the `--cflags` to determine the right flags for the C compiler 
 * Use the `--clink` to determine the correct linker to use
 * Use the `--ldflags` and `--libs` to get the flags and libraries for the linker. Place the output of the `--ldflags` at the beginning of the argument list, and the output of `--libs` at the end.
