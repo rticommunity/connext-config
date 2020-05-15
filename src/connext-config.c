@@ -49,10 +49,10 @@
  * NOTE: getenv("CWD") might not work when running inside a containers
  *       or a reduced shell.
  */
-#define USE_GEWCWD
+#define USE_GETCWD
 
 #define APPLICATION_NAME                        "connext-config"
-#define APPLICATION_VERSION                     "1.0.0"
+#define APPLICATION_VERSION                     "1.0.1"
 
 /* The location of the platform file to parse, from the NDDSHOME directory */
 #define NDDS_PLATFORM_FILE      \
@@ -295,7 +295,7 @@ static char *calcNDDSHOME(const char *argv0) {
          * argv0 is a relative path, build the absolute path by looking at 
          * the current working directory
          */
-#ifdef USE_GEWCWD
+#ifdef USE_GETCWD
         int wr;
         if (getcwd(retVal, PATH_MAX) == NULL) {
             fprintf(stderr,
@@ -317,7 +317,6 @@ static char *calcNDDSHOME(const char *argv0) {
                     "unable to calculate NDDSHOME\n");
             goto err;
         }
-        printf(">>>>> PWD=%s\n", pwd);
         snprintf(retVal, PATH_MAX, "%s/%s", pwd, argv0);
 #endif
         appPath = realpath(retVal, NULL);
@@ -410,6 +409,7 @@ err:
 }
 
 /* }}} */
+#ifndef NDEBUG
 /* {{{ dumpArch
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * Prints to stdout a dump of the list of architectures.
@@ -479,6 +479,7 @@ static void dumpArch(struct REDAInlineList *list) {
 }
 
 /* }}} */
+#endif
 /* {{{ archGetParam
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * Search the list of key-value pairs inside an Architecture object for the 
@@ -1447,15 +1448,19 @@ void usage() {
             APPLICATION_VERSION); 
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
     printf("Usage:\n");
-    printf("    %s -h|--help    Show this help\n", 
+    printf("    %s -h|--help        Show this help\n", 
             APPLICATION_NAME);
-    printf("    %s -V|--version Prints version number\n", 
+    printf("    %s -V|--version     Prints version number\n", 
             APPLICATION_NAME);
-    printf("    %s --list-all   List all platform architectures supported\n", 
+    printf("    %s --list-all       List all platform architectures supported\n", 
             APPLICATION_NAME);
-    printf("    %s --dump-all   Dump all platforms and all settings (testing only)\n", 
+    printf("    %s --list-installed List the installed architectures\n",
             APPLICATION_NAME);
-    printf("    %s [modifiers] <what> <targetArch>\n", 
+#ifndef NDEBUG
+    printf("    %s --dump-all       Dump all platforms and all settings (testing only)\n", 
+            APPLICATION_NAME);
+#endif
+    printf("    %s [modifiers] <what> [targetArch]\n", 
             APPLICATION_NAME);
     printf("\n");
     printf("Where [modifiers] are:\n");
@@ -1478,8 +1483,9 @@ void usage() {
     printf("    --os        output the OS (i.e. UNIX, ANDROID, IOS, ...)\n");
     printf("    --platform  output the Platform (i.e. i86, x64, armv7a, ...)\n");
     printf("\n");
-    printf("Required argument <targetArch> is one of the supported target architectures.\n");
-    printf("Use `--list-all` to output a list of supported architectures\n");
+    printf("Optional argument [targetArch] is one of the supported target architectures.\n");
+    printf("If not specified, uses environment variable NDDSARCH.\n");
+    printf("Use `--list-all` or `--list-installed` to print a list of architectures\n");
 }
 
 /* }}} */
@@ -1521,21 +1527,24 @@ int main(int argc, char **argv) {
         goto done;
     }
     if ((argc == 2) && (
-                (strcmp(argv[1], "--list-all") == 0) || 
-                (strcmp(argv[1], "--dump-all") == 0))) {
+#ifndef NDEBUG
+                (strcmp(argv[1], "--dump-all") == 0) ||
+#endif
+                (strcmp(argv[1], "--list-installed") == 0) ||
+                (strcmp(argv[1], "--list-all") == 0))) {
         argOp = argv[1];
 
     } else {
         int i;
 
-        /* Parse command line with at least 2 arguments */
-        if (argc < 3) {
+        /* Parse command line with at least 1 arguments */
+        if (argc < 2) {
             usage();
             retCode = APPLICATION_EXIT_INVALID_ARGS;
             goto done;
         }
 
-        for (i = 1; i < argc-1; ++i) {
+        for (i = 1; i < argc; ++i) {
             if ((strcmp(argv[i], "--static") == 0)) {
                 argStatic = RTI_TRUE;
                 continue;
@@ -1563,27 +1572,39 @@ int main(int argc, char **argv) {
                 argOp = argv[i];
                 continue;
             }
-            usage();
+            if (i == argc-1) {
+                /* Last unrecognized argument: assume target */
+                argTarget = argv[i];
+                continue;
+            }
             fprintf(stderr, "Error: invalid argument: %s\n", argv[i]);
             retCode = APPLICATION_EXIT_INVALID_ARGS;
             goto done;
         }
-        argTarget = argv[argc-1];
         /* Make sure the last argument is as intended the target */
-        if ((strcmp(argTarget, "-h") == 0) || 
-                (strcmp(argTarget, "--help") == 0)) {
-            usage();
-            retCode = APPLICATION_EXIT_SUCCESS;
-            goto done;
-        }
-        if (strncmp(argTarget, "--", 2) == 0) {
-            usage();
+        if (argTarget && (argTarget[0] == '-')) {
             fprintf(stderr, 
-                    "Error: missing target architecture\n");
-            fprintf(stderr, 
-                    "Use --list-all to print all the supported architectures\n");
+                    "Error: unknown argument: %s\n"
+                    "Use --list-all or --list-installed to print the architectures\n", 
+                    argTarget);
             retCode = APPLICATION_EXIT_INVALID_ARGS;
             goto done;
+        }
+        if (argTarget == NULL) {
+            /* 
+             * argTarget is not defined, look at the environment variable
+             * $NDDSARCH
+             */
+            char *tmp;
+            tmp = getenv("NDDSARCH");
+            if (tmp == NULL) {
+                fprintf(stderr,
+                        "Target architecture not specified and NDDSARCH not defined\n"
+                        "Use --list-all or --list-installed to print the architectures\n");
+                retCode = APPLICATION_EXIT_INVALID_ARGS;
+                goto done;
+            }
+            argTarget = tmp;
         }
     }
 
@@ -1618,11 +1639,13 @@ int main(int argc, char **argv) {
 
     /* Read and parse platform file */
     readPlatformFile(platformFile, archDef);
+#ifndef NDEBUG
     if ((strcmp(argOp, "--dump-all") == 0)) {
         dumpArch(archDef);
         retCode = APPLICATION_EXIT_SUCCESS;
         goto done;
     }
+#endif
 
     if ((strcmp(argOp, "--list-all") == 0)) {
         struct REDAInlineListNode *archNode;
@@ -1635,6 +1658,37 @@ int main(int argc, char **argv) {
         retCode = APPLICATION_EXIT_SUCCESS;
         goto done;
     }
+    if ((strcmp(argOp, "--list-installed") == 0)) {
+        /* Reuse the platformFile buffer (since is no longer required) to compose
+         * the lib directory path
+         */
+        struct REDAInlineListNode *archNode;
+        struct stat statbuf;
+        int rc;
+        for (archNode = REDAInlineList_getFirst(archDef); 
+                archNode != NULL; 
+                archNode = REDAInlineListNode_getNext(archNode)) {
+            struct Architecture *arch = (struct Architecture *)archNode;
+            snprintf(platformFile, PATH_MAX, "%s/lib/%s", NDDSHOME, arch->target);
+            rc = stat(platformFile, &statbuf);
+            if (rc != 0) {
+                if (errno == ENOENT) {
+                    // target is not installed
+                    continue;
+                }
+                fprintf(stderr, "Error stat() failed: %s (errno=%d)\n", strerror(errno), errno);
+                retCode = APPLICATION_EXIT_FAILURE;
+                goto done;
+            }
+            if (S_ISDIR(statbuf.st_mode)) {
+                printf("%s\n", arch->target);
+            }
+            // else it must be a file, ignore it
+        }
+        retCode = APPLICATION_EXIT_SUCCESS;
+        goto done;
+    }
+
 
     /* Find target */
     archTarget = NULL;
@@ -1649,12 +1703,11 @@ int main(int argc, char **argv) {
         }
     }
     if (archTarget == NULL) {
-        usage();
         fprintf(stderr,
                 "Error: requested architecture '%s' is not supported\n",
                 argTarget);
         fprintf(stderr,
-                "Use --list-all to print all the supported architectures\n");
+                "Use --list-all or --list-installed to print all the architectures\n");
         retCode = APPLICATION_EXIT_INVALID_ARGS;
         goto done;
     }
