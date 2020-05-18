@@ -96,7 +96,7 @@ AC_ARG_ENABLE(target,
 ])
 
 
-if test -z `connext-config --list-all | grep ${NDDSARCH}`; then
+if test -z `${NDDSHOME}/bin/connext-config --list-all | grep ${NDDSARCH}`; then
     AC_MSG_ERROR(invalid or unsupported target type);
 fi
 if test $? -ne 0; then
@@ -110,10 +110,10 @@ else
     AC_MSG_RESULT(Using RTI ConnextDDS RELEASE libraries)
     RTICFG_DEBUG=""
 fi
-CC="`connext-config --ccomp ${NDDSARCH}`"
-LD="`connext-config --clink ${NDDSARCH}`"
-CFLAGS="$CFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --cflags ${NDDSARCH}`"
-LDFLAGS="`connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldflags ${NDDSARCH}`"
-LIBS="$LDFLAGS `connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldlibs ${NDDSARCH}`"
+CC="`${NDDSHOME}/bin/connext-config --ccomp ${NDDSARCH}`"
+LD="`${NDDSHOME}/bin/connext-config --clink ${NDDSARCH}`"
+CFLAGS="$CFLAGS `${NDDSHOME}/bin/connext-config $RTICFG_STATIC $RTICFG_DEBUG --cflags ${NDDSARCH}`"
+LDFLAGS="`${NDDSHOME}/bin/connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldflags ${NDDSARCH}`"
+LIBS="$LDFLAGS `${NDDSHOME}/bin/connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldlibs ${NDDSARCH}`"
 
 
