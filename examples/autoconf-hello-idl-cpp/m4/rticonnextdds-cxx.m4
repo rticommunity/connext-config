@@ -47,18 +47,6 @@ AC_CHECK_FILE("${NDDSHOME}/include/ndds/ndds_c.h",
         AC_MSG_ERROR(RTI Connext DDS not found or NDDSHOME not defined)
 ])
 
-dnl Verify the Connext DDS installation has the connext-config utility
-AC_CHECK_FILE("${NDDSHOME}/bin/connext-config", 
-[
-        AC_MSG_RESULT(Successfully validated connext-config )
-],[
-   AC_MSG_RESULT()
-   AC_MSG_RESULT(Cannot find connext-config utility installed on your RTI Connext DDS home directory)
-   AC_MSG_RESULT(For more info see: https://github.com/fabriziobertocci/connext-config)
-   AC_MSG_ERROR()
-])
-
-
 dnl ****************************************************************************
 dnl --with-rticonnextdds-static                                                              *
 dnl ****************************************************************************
@@ -72,6 +60,39 @@ AC_ARG_WITH([rticonnextdds-static],
         AC_MSG_RESULT(Using RTI ConnextDDS DYNAMIC libraries)
     ]
 )
+
+
+dnl ****************************************************************************
+dnl --with-connext-config
+dnl ****************************************************************************
+dnl Allow user to define the connext-config to use, falling back to $NDDSHOME/bin if
+dnl not specified
+AC_ARG_WITH([connext-config],
+    [AC_HELP_STRING([--with-connext-config],[defines the connext-config to use])],
+    [
+        if test "a${withval}a" = "aa"; then
+            AC_MSG_ERROR(missing argument for --with-connext config);
+        else
+            CONNEXT_CONFIG="${withval}"
+            export NDDSHOME
+        fi
+        AC_MSG_RESULT(Using connext-config from: ${CONNEXT_CONFIG})
+    ], [ 
+        AC_MSG_RESULT(Using connext-config from NDDSHOME)
+        CONNEXT_CONFIG="${NDDSHOME}/bin"
+    ]
+)
+
+dnl Verify that connext-config is available
+AC_CHECK_FILE("${CONNEXT_CONFIG}", 
+[
+        AC_MSG_RESULT(Successfully validated connext-config )
+],[
+   AC_MSG_RESULT()
+   AC_MSG_RESULT(Cannot find connext-config utility in: ${CONNEXT_CONFIG})
+   AC_MSG_RESULT(For more info see: https://github.com/rticommunity/connext-config)
+   AC_MSG_ERROR()
+])
 
 
 
@@ -96,7 +117,7 @@ AC_ARG_ENABLE(target,
 ])
 
 
-if test -z `${NDDSHOME}/bin/connext-config --list-all | grep ${NDDSARCH}`; then
+if test -z `${CONNEXT_CONFIG} --list-all | grep ${NDDSARCH}`; then
     AC_MSG_ERROR(invalid or unsupported target type);
 fi
 if test $? -ne 0; then
@@ -110,10 +131,10 @@ else
     AC_MSG_RESULT(Using RTI ConnextDDS RELEASE libraries)
     RTICFG_DEBUG=""
 fi
-CC="`${NDDSHOME}/bin/connext-config --cxxcomp ${NDDSARCH}`"
-LD="`${NDDSHOME}/bin/connext-config --cxxlink ${NDDSARCH}`"
-CFLAGS="$CFLAGS `${NDDSHOME}/bin/connext-config $RTICFG_STATIC $RTICFG_DEBUG --cxxflags ${NDDSARCH}`"
-LDFLAGS="`${NDDSHOME}/bin/connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldxxflags ${NDDSARCH}`"
-LIBS="$LDFLAGS `${NDDSHOME}/bin/connext-config $RTICFG_STATIC $RTICFG_DEBUG --ldxxlibs ${NDDSARCH}`"
+CC="`${CONNEXT_CONFIG} --cxxcomp ${NDDSARCH}`"
+LD="`${CONNEXT_CONFIG} --cxxlink ${NDDSARCH}`"
+CFLAGS="$CFLAGS `${CONNEXT_CONFIG} $RTICFG_STATIC $RTICFG_DEBUG --cxxflags ${NDDSARCH}`"
+LDFLAGS="`${CONNEXT_CONFIG} $RTICFG_STATIC $RTICFG_DEBUG --ldxxflags ${NDDSARCH}`"
+LIBS="$LDFLAGS `${CONNEXT_CONFIG} $RTICFG_STATIC $RTICFG_DEBUG --ldxxlibs ${NDDSARCH}`"
 
 
