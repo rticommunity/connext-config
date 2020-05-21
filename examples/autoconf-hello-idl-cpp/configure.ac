@@ -42,9 +42,9 @@ dnl ****************************************************************************
 AC_ARG_ENABLE(warnings,
 [  --enable-warnings       enable compiler warnings during build ],
 [
-        CFLAGS="$CFLAGS -Wall -Wpointer-arith -Wwrite-strings -Wconversion -Wcast-qual -W -Wimplicit-fallthrough=0"
+        CFLAGS="$CFLAGS -Wall -Wpointer-arith -Wwrite-strings -Wconversion -Wcast-qual -W -Wimplicit-fallthrough -Wmissing-field-initializers"
 ],[
-        CFLAGS="$CFLAGS -W -Wimplicit-fallthrough=0"
+        CFLAGS="$CFLAGS -W -Wno-implicit-fallthrough -Wno-missing-field-initializers"
 ])
 
 m4_include([m4/rticonnextdds-cxx.m4])
