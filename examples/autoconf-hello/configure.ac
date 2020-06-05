@@ -1,7 +1,9 @@
-dnl ****************************************************************************
-dnl * (c) Copyright 2020, Real-Time Innovations, Inc. All rights reserved.     *
-dnl * Subject to Eclipse Public License v1.0; see LICENSE.md for details.      *
-dnl ****************************************************************************
+dnl *****************************************************************************
+dnl * Copyright (c) 2020 Real-Time Innovations, Inc.  All rights reserved.      *
+dnl *                                                                           *
+dnl * Permission to modify and use for internal purposes granted.               *
+dnl * This software is provided "as is", without warranty, express or implied.  *
+dnl *****************************************************************************
 
 AC_INIT(Hello, 1.0, fabrizio@rti.com)
 AC_CONFIG_SRCDIR([src/Hello.c])
@@ -36,15 +38,15 @@ AC_ARG_ENABLE(debug,
 ])
 
 
-dnl ****************************************************************************
-dnl Enable/disable compiler warnings
-dnl ****************************************************************************
+dnl **********************************************************************************************
+dnl * Enable/disable compiler warnings                                                           *
+dnl **********************************************************************************************
 AC_ARG_ENABLE(warnings,
-[  --enable-warnings       enable compiler warnings during build ],
+[  --enable-warnings      enable compiler warnings during build ],
 [
-        CFLAGS="$CFLAGS -Wall -Wpointer-arith -Wwrite-strings -Wconversion -Wcast-qual -W -Wimplicit-fallthrough=0"
+        CFLAGS="$CFLAGS -Wall -Wpointer-arith -Wwrite-strings -Wconversion -Wcast-qual -W -Wimplicit-fallthrough -Wmissing-field-initializers -Wunused-parameter"
 ],[
-        CFLAGS="$CFLAGS -W -Wimplicit-fallthrough=0"
+        CFLAGS="$CFLAGS -W -Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-unused-parameter"
 ])
 
 m4_include([m4/rticonnextdds.m4])
