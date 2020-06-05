@@ -1,7 +1,10 @@
-dnl ****************************************************************************
-dnl * (c) Copyright 2020, Real-Time Innovations, Inc. All rights reserved.     *
-dnl * Subject to Eclipse Public License v1.0; see LICENSE.md for details.      *
-dnl ****************************************************************************
+dnl *****************************************************************************
+dnl * Copyright (c) 2020 Real-Time Innovations, Inc.  All rights reserved.      *
+dnl *                                                                           *
+dnl * Permission to modify and use for internal purposes granted.               *
+dnl * This software is provided "as is", without warranty, express or implied.  *
+dnl *****************************************************************************
+
 dnl
 dnl Check for RTI ConnextDDS
 dnl
@@ -48,21 +51,6 @@ AC_CHECK_FILE("${NDDSHOME}/include/ndds/ndds_c.h",
 ])
 
 dnl ****************************************************************************
-dnl --with-rticonnextdds-static                                                              *
-dnl ****************************************************************************
-RTICFG_STATIC=""
-AC_ARG_WITH([rticonnextdds-static],
-    [AC_HELP_STRING([--with-rticonnextdds-static],[uses RTI static libraries instead of dynamic libs])],
-    [
-        RTICFG_STATIC="--static"
-        AC_MSG_RESULT(Using RTI ConnextDDS STATIC libraries)
-    ], [ 
-        AC_MSG_RESULT(Using RTI ConnextDDS DYNAMIC libraries)
-    ]
-)
-
-
-dnl ****************************************************************************
 dnl --with-connext-config
 dnl ****************************************************************************
 dnl Allow user to define the connext-config to use, falling back to $NDDSHOME/bin if
@@ -79,7 +67,7 @@ AC_ARG_WITH([connext-config],
         AC_MSG_RESULT(Using connext-config from: ${CONNEXT_CONFIG})
     ], [ 
         AC_MSG_RESULT(Using connext-config from NDDSHOME)
-        CONNEXT_CONFIG="${NDDSHOME}/bin"
+        CONNEXT_CONFIG="${NDDSHOME}/bin/connext-config"
     ]
 )
 
@@ -89,10 +77,26 @@ AC_CHECK_FILE("${CONNEXT_CONFIG}",
         AC_MSG_RESULT(Successfully validated connext-config )
 ],[
    AC_MSG_RESULT()
-   AC_MSG_RESULT(Cannot find connext-config utility in: ${CONNEXT_CONFIG})
+   AC_MSG_RESULT(Cannot find the connext-config utility)
    AC_MSG_RESULT(For more info see: https://github.com/rticommunity/connext-config)
-   AC_MSG_ERROR()
+   AC_MSG_RESULT(To use a specific version of connext-config use: --with-connext-config=<path>)
+   AC_MSG_ERROR(connext-config validation failed)
 ])
+
+
+dnl ****************************************************************************
+dnl --with-rticonnextdds-static                                                              *
+dnl ****************************************************************************
+RTICFG_STATIC=""
+AC_ARG_WITH([rticonnextdds-static],
+    [AC_HELP_STRING([--with-rticonnextdds-static],[uses RTI static libraries instead of dynamic libs])],
+    [
+        RTICFG_STATIC="--static"
+        AC_MSG_RESULT(Using RTI ConnextDDS STATIC libraries)
+    ], [ 
+        AC_MSG_RESULT(Using RTI ConnextDDS DYNAMIC libraries)
+    ]
+)
 
 
 
@@ -100,7 +104,7 @@ dnl ****************************************************************************
 dnl --enable-target
 dnl ****************************************************************************
 AC_ARG_ENABLE(target,
-[AC_HELP_STRING([--enable-target],[specify the target architecture for RTI Connext DDS (required). Use 'connext-config --list-all' to view the supported targets])],
+[AC_HELP_STRING([--enable-target],[specify the target architecture for RTI Connext DDS (required). Use 'connext-config --list-installed' to view the available targets])],
 [
         if test "${enableval}" = "yes"; then
             AC_MSG_ERROR(missing argument for --enable-target parameter);
@@ -117,7 +121,7 @@ AC_ARG_ENABLE(target,
 ])
 
 
-if test -z `${CONNEXT_CONFIG} --list-all | grep ${NDDSARCH}`; then
+if test -z `${CONNEXT_CONFIG} --list-installed | grep ${NDDSARCH}`; then
     AC_MSG_ERROR(invalid or unsupported target type);
 fi
 if test $? -ne 0; then
