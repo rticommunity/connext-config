@@ -1,7 +1,8 @@
 /*****************************************************************************
- * Copyright 2020 Real-Time Innovations, Inc.                                *
- * Author: fabriziobertocci@gmail.com                                        *
- * Subject to Eclipse Public License v1.0; see LICENSE.md for details.       *
+ * Copyright (c) 2020 Real-Time Innovations, Inc.  All rights reserved.      *
+ *                                                                           *
+ * Permission to modify and use for internal purposes granted.               *
+ * This software is provided "as is", without warranty, express or implied.  *
  *****************************************************************************/
 
 /*
