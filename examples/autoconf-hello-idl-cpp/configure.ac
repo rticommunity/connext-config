@@ -38,15 +38,15 @@ AC_ARG_ENABLE(debug,
 ])
 
 
-dnl ****************************************************************************
-dnl Enable/disable compiler warnings
-dnl ****************************************************************************
+dnl **********************************************************************************************
+dnl * Enable/disable compiler warnings                                                           *
+dnl **********************************************************************************************
 AC_ARG_ENABLE(warnings,
-[  --enable-warnings       enable compiler warnings during build ],
+[  --enable-warnings      enable compiler warnings during build ],
 [
-        CFLAGS="$CFLAGS -Wall -Wpointer-arith -Wwrite-strings -Wconversion -Wcast-qual -W -Wimplicit-fallthrough -Wmissing-field-initializers"
+        CFLAGS="$CFLAGS -Wall -Wpointer-arith -Wwrite-strings -Wconversion -Wcast-qual -W -Wimplicit-fallthrough -Wmissing-field-initializers -Wunused-parameter"
 ],[
-        CFLAGS="$CFLAGS -W -Wno-implicit-fallthrough -Wno-missing-field-initializers"
+        CFLAGS="$CFLAGS -W -Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-unused-parameter"
 ])
 
 m4_include([m4/rticonnextdds-cxx.m4])
