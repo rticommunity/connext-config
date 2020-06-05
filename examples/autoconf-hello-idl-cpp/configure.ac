@@ -1,7 +1,9 @@
-dnl ****************************************************************************
-dnl * (c) Copyright 2020, Real-Time Innovations, Inc. All rights reserved.     *
-dnl * Subject to Eclipse Public License v1.0; see LICENSE.md for details.      *
-dnl ****************************************************************************
+dnl *****************************************************************************
+dnl * Copyright (c) 2020 Real-Time Innovations, Inc.  All rights reserved.      *
+dnl *                                                                           *
+dnl * Permission to modify and use for internal purposes granted.               *
+dnl * This software is provided "as is", without warranty, express or implied.  *
+dnl *****************************************************************************
 
 AC_INIT(Hello, 1.0, fabrizio@rti.com)
 AC_CONFIG_SRCDIR([src/Hello.cxx])

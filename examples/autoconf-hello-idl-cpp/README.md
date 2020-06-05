@@ -22,7 +22,7 @@ Once you have the ./configure script you can use it, for example, to build for t
 
 ```
 $ ./configure --enable-target=x64Linux4gcc7.3.0 \
-              --with-rticonnextdds=~/rti_connext_dds-6.0.1 \
+              --with-rticonnextdds=/opt/rti_connext_dds-6.0.1 \
               --enable-dynamic \
               --enable-debug
 $ make
