@@ -141,4 +141,20 @@ CFLAGS="$CFLAGS `${CONNEXT_CONFIG} $RTICFG_STATIC $RTICFG_DEBUG --cxxflags ${NDD
 LDFLAGS="`${CONNEXT_CONFIG} $RTICFG_STATIC $RTICFG_DEBUG --ldxxflags ${NDDSARCH}`"
 LIBS="$LDFLAGS `${CONNEXT_CONFIG} $RTICFG_STATIC $RTICFG_DEBUG --ldxxlibs ${NDDSARCH}`"
 
+dnl ****************************************************************************
+dnl Defines the env variable 'RTI_LIB_SUFFIX' to match the suffix to any 
+dnl additional library your application may require.
+dnl For example, if you need to add the request/reply messaging library, in your
+dnl Makefile, add:
+dnl     myApp_LDADD = $(LDADD) -lrticonnextmsgcpp@RTI_LIB_SUFFIX@
+
+RTI_LIB_SUFFIX=""
+if test ! -z ${RTICFG_STATIC}; then
+    RTI_LIB_SUFFIX="z"
+fi
+if test ! -z ${RTICFG_DEBUG}; then
+    RTI_LIB_SUFFIX="${RTI_LIB_SUFFIX}d"
+fi
+AC_SUBST(RTI_LIB_SUFFIX)
+
 
