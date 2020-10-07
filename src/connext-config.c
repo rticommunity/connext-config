@@ -53,7 +53,7 @@
 #define USE_GETCWD
 
 #define APPLICATION_NAME                        "connext-config"
-#define APPLICATION_VERSION                     "1.0.1"
+#define APPLICATION_VERSION                     "1.0.2"
 
 /* The location of the platform file to parse, from the NDDSHOME directory */
 #define NDDS_PLATFORM_FILE      \
@@ -67,8 +67,10 @@
 
 /* NULL-terminated array of valid <what> commands */
 const char * VALID_WHAT[] = {
-    "--ccomp", "--clink", "--cxxcomp", "--cxxlink", "--cflags", "--cxxflags",
-    "--ldflags", "--ldxxflags", "--ldlibs", "--ldxxlibs",
+    "--ccomp", "--cflags", "--clink", "--ldflags", "--ldlibs",
+    "--cxxcomp", "--cxxflags", "--cxxlink", "--ldxxflags", "--ldxxlibs",
+    "--cxx03comp", "--cxx03flags", "--cxx03link", "--ldxx03flags", "--ldxx03libs",
+    "--cxx11comp", "--cxx11flags", "--cxx11link", "--ldxx11flags", "--ldxx11libs",
     "--os", "--platform",
     NULL
 };
@@ -696,6 +698,73 @@ RTIBool printStringProperty(struct Architecture *arch,
         return RTI_FALSE;
     }
     puts(toPrint);
+    return RTI_TRUE;
+}
+
+/* }}} */
+/* {{{ getBooleanProperty
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Look for the given property and if set returns its boolean value.
+ * Returns FALSE if the property is not defined.
+ * If the property is not a boolean, prints an error and return FALSE (Release
+ * mode), or abort (Debug mode).
+ *
+ * \param arch      a pointer to the Architecture object
+ * \param propName  the name of the property to lookup
+ * \return          RTI_TRUE or RTI_FALSE
+ */
+RTIBool getBooleanProperty(struct Architecture *arch,
+        const char *propName) {
+    char *toPrint;
+    struct ArchParameter *ap = archGetParam(arch, propName);
+    if (ap == NULL) {
+        /* Variable not defined */
+        return RTI_FALSE;
+    }
+    if (ap->valueType != APVT_Boolean) {
+        fprintf(stderr,
+                "Property '%s' is not a boolean (%d) for target '%s'\n",
+                propName,
+                ap->valueType,
+                arch->target);
+#ifndef NDEBUG
+        abort();
+#else
+        return RTI_FALSE;
+#endif
+    }
+    return ap->value.as_bool;
+}
+
+/* }}} */
+/* {{{ ensureTargetSupportsCxx03
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * \param arch      a pointer to the Architecture object
+ * \return          RTI_TRUE if the architecture supports Cxx03, FALSE otherwise
+ */
+RTIBool ensureTargetSupportsCxx03(struct Architecture *arch) {
+    if (!getBooleanProperty(arch, "$SUPPORTS_CPP03")) {
+        fprintf(stderr,
+                "Error: target '%s' does not support C++03\n",
+                arch->target);
+        return RTI_FALSE;
+    }
+    return RTI_TRUE;
+}
+
+/* }}} */
+/* {{{ ensureTargetSupportsCxx11
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * \param arch      a pointer to the Architecture object
+ * \return          RTI_TRUE if the architecture supports Cxx03, FALSE otherwise
+ */
+RTIBool ensureTargetSupportsCxx11(struct Architecture *arch) {
+    if (!getBooleanProperty(arch, "$SUPPORTS_CPP11")) {
+        fprintf(stderr,
+                "Error: target '%s' does not support C++11\n",
+                arch->target);
+        return RTI_FALSE;
+    }
     return RTI_TRUE;
 }
 
@@ -1464,25 +1533,42 @@ void usage() {
     printf("    %s [modifiers] <what> [targetArch]\n", 
             APPLICATION_NAME);
     printf("\n");
+    /*      0        1         2         3         4         5         6         7         8 */
+    /*      12345678901234567890123456789012345678901234567890123456789012345678901234567890 */
     printf("Where [modifiers] are:\n");
-    printf("    --static    use static linking against RTI Connext DDS\n");
-    printf("    --debug     use debug version of the RTI Connext DDS libraries\n");
-    printf("    --sh        use shell-like variable expansion (vs. make-like variables)\n");
-    printf("    --noexpand  do not expand environment variables in output\n");
+    printf("    --static      use static linking against RTI Connext DDS\n");
+    printf("    --debug       use debug version of the RTI Connext DDS libraries\n");
+    printf("    --sh          use shell-like variable expansion (vs. make-like variables)\n");
+    printf("    --noexpand    do not expand environment variables in output\n");
     printf("\n");
     printf("Required argument <what> is one of:\n");
-    printf("    --ccomp     output the C compiler to use\n");
-    printf("    --clink     output the C linker to use\n");
-    printf("    --cxxcomp   output the C++ compiler to use\n");
-    printf("    --cxxlink   output the C++ linker to use\n");
-    printf("    --cflags    output all pre-processor and compiler flags for C compiler\n");
-    printf("    --cxxflags  output all pre-processor and compiler flags for C++ compiler\n");
-    printf("    --ldflags   output the linker flags to use when building C programs\n");
-    printf("    --ldxxflags output the linker flags to use when building C++ programs\n");
-    printf("    --ldlibs    output the required libraries for C programs\n");
-    printf("    --ldxxlibs  output the required libraries for C++ programs\n");
-    printf("    --os        output the OS (i.e. UNIX, ANDROID, IOS, ...)\n");
-    printf("    --platform  output the Platform (i.e. i86, x64, armv7a, ...)\n");
+    printf("  C API:\n");
+    printf("    --ccomp       output the C compiler to use\n");
+    printf("    --cflags      output all pre-processor and compiler flags\n");
+    printf("    --clink       output the C linker to use\n");
+    printf("    --ldflags     output the linker flags\n");
+    printf("    --ldlibs      output the required libraries\n");
+    printf("  Traditional C++ API:\n");
+    printf("    --cxxcomp     output the C++ compiler to use\n");
+    printf("    --cxxflags    output all pre-processor and compiler flags\n");
+    printf("    --cxxlink     output the C++ linker to use\n");
+    printf("    --ldxxflags   output the linker flags\n");
+    printf("    --ldxxlibs    output the required libraries\n");
+    printf("  Modern C++ API (C++-03):\n");
+    printf("    --cxx03comp   output the C++ compiler to use\n");
+    printf("    --cxx03flags  output all pre-processor and compiler flags\n");
+    printf("    --cxx03link   output the C++ linker to use\n");
+    printf("    --ldxx03flags output the linker flags\n");
+    printf("    --ldxx03libs  output the required libraries\n");
+    printf("  Modern C++ API (C++-11):\n");
+    printf("    --cxx11comp   output the C++ compiler to use\n");
+    printf("    --cxx11flags  output all pre-processor and compiler flags\n");
+    printf("    --cxx11link   output the C++ linker to use\n");
+    printf("    --ldxx11flags output the linker flags\n");
+    printf("    --ldxx11libs  output the required libraries\n");
+    printf("  Miscellaneous:\n");
+    printf("    --os          output the OS (i.e. UNIX, ANDROID, IOS, ...)\n");
+    printf("    --platform    output the Platform (i.e. i86, x64, armv7a, ...)\n");
     printf("\n");
     printf("Optional argument [targetArch] is one of the supported target architectures.\n");
     printf("If not specified, uses environment variable NDDSARCH.\n");
@@ -1506,8 +1592,10 @@ int main(int argc, char **argv) {
     struct REDAInlineList *archDef = NULL;
     struct Architecture *archTarget;
     char *nddsFlags = NULL;
+    char *nddsCPP03Flags = NULL;
     char *nddsCLibs = NULL;
     char *nddsCPPLibs = NULL;
+    char *nddsCPP03Libs = NULL;
     const char *libSuffix;
 
     if (argc <= 1) {
@@ -1607,6 +1695,11 @@ int main(int argc, char **argv) {
             }
             argTarget = tmp;
         }
+    }
+    if (!argOp) {
+        fprintf(stderr, "Missing operation. Use `%s --help` for usage information.\n", APPLICATION_NAME);
+        retCode = APPLICATION_EXIT_INVALID_ARGS;
+        goto done;
     }
 
     /* Determine NDDSHOME and platform file */
@@ -1723,9 +1816,15 @@ int main(int argc, char **argv) {
         libSuffix = "zd";
     }
     nddsFlags = calloc(MAX_CMDLINEARG_SIZE+1, 1);
+    nddsCPP03Flags = calloc(MAX_CMDLINEARG_SIZE+1, 1);
     nddsCLibs = calloc(MAX_CMDLINEARG_SIZE+1, 1);
     nddsCPPLibs = calloc(MAX_CMDLINEARG_SIZE+1, 1);
-    if ((nddsFlags == NULL) || (nddsCLibs == NULL) || (nddsCPPLibs == NULL)) {
+    nddsCPP03Libs = calloc(MAX_CMDLINEARG_SIZE+1, 1);
+    if (    (nddsFlags == NULL) || 
+            (nddsCPP03Flags == NULL) ||
+            (nddsCLibs == NULL) || 
+            (nddsCPPLibs == NULL) || 
+            (nddsCPP03Libs == NULL) ) {
         fprintf(stderr, "Out of memory allocating command-line arguments");
         retCode = APPLICATION_EXIT_FAILURE;
         goto done;
@@ -1736,6 +1835,12 @@ int main(int argc, char **argv) {
         snprintf(nddsFlags,
                 MAX_CMDLINEARG_SIZE,
                 "-I%s/include -I%s/include/ndds",
+                NDDSHOME,
+                NDDSHOME);
+        snprintf(nddsCPP03Flags,
+                MAX_CMDLINEARG_SIZE,
+                "-I%s/include -I%s/include/ndds -I%s/include/ndds/hpp",
+                NDDSHOME,
                 NDDSHOME,
                 NDDSHOME);
         snprintf(nddsCLibs,
@@ -1753,6 +1858,14 @@ int main(int argc, char **argv) {
                 libSuffix,
                 libSuffix,
                 libSuffix);
+        snprintf(nddsCPP03Libs,
+                MAX_CMDLINEARG_SIZE,
+                "-L%s/lib/%s -lnddscpp2%s -lnddsc%s -lnddscore%s",
+                NDDSHOME,
+                argTarget,
+                libSuffix,
+                libSuffix,
+                libSuffix);
     } else {
         /* Do not expand variables */
         if (argShell == RTI_TRUE) {
@@ -1760,6 +1873,9 @@ int main(int argc, char **argv) {
             snprintf(nddsFlags,
                     MAX_CMDLINEARG_SIZE,
                     "-I${NDDSHOME}/include -I${NDDSHOME}/include/ndds");
+            snprintf(nddsCPP03Flags,
+                    MAX_CMDLINEARG_SIZE,
+                    "-I${NDDSHOME}/include -I${NDDSHOME}/include/ndds -I${NDDSHOME}/include/ndds/hpp");
             snprintf(nddsCLibs,
                     MAX_CMDLINEARG_SIZE,
                     "-L${NDDSHOME}/lib/%s -lnddsc%s -lnddscore%s",
@@ -1773,11 +1889,21 @@ int main(int argc, char **argv) {
                     libSuffix,
                     libSuffix,
                     libSuffix);
+            snprintf(nddsCPP03Libs,
+                    MAX_CMDLINEARG_SIZE,
+                    "-L${NDDSHOME}/lib/%s -lnddscpp2%s -lnddsc%s -lnddscore%s",
+                    argTarget,
+                    libSuffix,
+                    libSuffix,
+                    libSuffix);
         } else {
             /* Use makefile style */
             snprintf(nddsFlags,
                     MAX_CMDLINEARG_SIZE,
                     "-I$(NDDSHOME)/include -I$(NDDSHOME)/include/ndds");
+            snprintf(nddsCPP03Flags,
+                    MAX_CMDLINEARG_SIZE,
+                    "-I$(NDDSHOME)/include -I$(NDDSHOME)/include/ndds, -I$(NDDSHOME)/include/ndds/hpp");
             snprintf(nddsCLibs,
                     MAX_CMDLINEARG_SIZE,
                     "-L$(NDDSHOME)/lib/%s -lnddsc%s -lnddscore%s",
@@ -1791,38 +1917,23 @@ int main(int argc, char **argv) {
                     libSuffix,
                     libSuffix,
                     libSuffix);
+            snprintf(nddsCPP03Libs,
+                    MAX_CMDLINEARG_SIZE,
+                    "-L$(NDDSHOME)/lib/%s -lnddscpp2%s -lnddsc%s -lnddscore%s",
+                    argTarget,
+                    libSuffix,
+                    libSuffix,
+                    libSuffix);
         }
     } 
 
     /* Process request operation */
     retCode = APPLICATION_EXIT_SUCCESS;
+
+    /******************* C API ***************************/
     if ((strcmp(argOp, "--ccomp") == 0)) {
         if (printStringProperty(archTarget, 
                     "$C_COMPILER", 
-                    argExpandEnvVar) == RTI_FALSE) {
-            retCode = APPLICATION_EXIT_FAILURE;
-            goto done;
-        }
-
-    } else if ((strcmp(argOp, "--clink") == 0)) {
-        if (printStringProperty(archTarget,
-                    "$C_LINKER",
-                    argExpandEnvVar) == RTI_FALSE) {
-            retCode = APPLICATION_EXIT_FAILURE;
-            goto done;
-        }
-
-    } else if ((strcmp(argOp, "--cxxcomp") == 0)) {
-        if (printStringProperty(archTarget,
-                    "$CXX_COMPILER",
-                    argExpandEnvVar) == RTI_FALSE) {
-            retCode = APPLICATION_EXIT_FAILURE;
-            goto done;
-        }
-
-    } else if ((strcmp(argOp, "--cxxlink") == 0)) {
-        if (printStringProperty(archTarget,
-                    "$CXX_LINKER",
                     argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
@@ -1844,18 +1955,10 @@ int main(int argc, char **argv) {
             goto done;
         }
 
-    } else if ((strcmp(argOp, "--cxxflags") == 0)) {
-        const char *FLAGS[] = {
-            "$CXX_COMPILER_FLAGS",
-            "$DEFINES",
-            "$INCLUDES",
-            nddsFlags,
-            NULL
-        };
-        if (printCompositeFlagsProperties(archTarget,
-                    FLAGS,
-                    argExpandEnvVar,
-                    argShell) == RTI_FALSE) {
+    } else if ((strcmp(argOp, "--clink") == 0)) {
+        if (printStringProperty(archTarget,
+                    "$C_LINKER",
+                    argExpandEnvVar) == RTI_FALSE) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
@@ -1863,19 +1966,6 @@ int main(int argc, char **argv) {
     } else if ((strcmp(argOp, "--ldflags") == 0)) {
         const char *FLAGS[] = {
             "$C_LINKER_FLAGS",
-            NULL
-        };
-        if (printCompositeFlagsProperties(archTarget,
-                    FLAGS,
-                    argExpandEnvVar,
-                    argShell) == RTI_FALSE) {
-            retCode = APPLICATION_EXIT_FAILURE;
-            goto done;
-        }
-
-    } else if ((strcmp(argOp, "--ldxxflags") == 0)) {
-        const char *FLAGS[] = {
-            "$CXX_LINKER_FLAGS",
             NULL
         };
         if (printCompositeFlagsProperties(archTarget,
@@ -1901,6 +1991,54 @@ int main(int argc, char **argv) {
             goto done;
         }
 
+
+    /*************** Traditional C++ API *****************/
+    
+    } else if ((strcmp(argOp, "--cxxcomp") == 0)) {
+        if (printStringProperty(archTarget,
+                    "$CXX_COMPILER",
+                    argExpandEnvVar) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+    } else if ((strcmp(argOp, "--cxxflags") == 0)) {
+        const char *FLAGS[] = {
+            "$CXX_COMPILER_FLAGS",
+            "$DEFINES",
+            "$INCLUDES",
+            nddsFlags,
+            NULL
+        };
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+    } else if ((strcmp(argOp, "--cxxlink") == 0)) {
+        if (printStringProperty(archTarget,
+                    "$CXX_LINKER",
+                    argExpandEnvVar) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+    } else if ((strcmp(argOp, "--ldxxflags") == 0)) {
+        const char *FLAGS[] = {
+            "$CXX_LINKER_FLAGS",
+            NULL
+        };
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
     } else if ((strcmp(argOp, "--ldxxlibs") == 0)) {
         const char *FLAGS[] = {
             nddsCPPLibs,
@@ -1915,6 +2053,177 @@ int main(int argc, char **argv) {
             retCode = APPLICATION_EXIT_FAILURE;
             goto done;
         }
+
+
+    /***************** Modern C++ API *******************/
+
+    } else if ((strcmp(argOp, "--cxx03comp") == 0)) {
+        if (!ensureTargetSupportsCxx03(archTarget)) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+        if (printStringProperty(archTarget,
+                    "$CXX_COMPILER",
+                    argExpandEnvVar) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+    } else if ((strcmp(argOp, "--cxx03flags") == 0)) {
+        const char *FLAGS[] = {
+            "$CXX_COMPILER_FLAGS",
+            "$CPP03_COMPILER_FLAGS",
+            "$DEFINES",
+            "$INCLUDES",
+            nddsCPP03Flags,
+            NULL
+        };
+        if (!ensureTargetSupportsCxx03(archTarget)) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+    } else if ((strcmp(argOp, "--cxx03link") == 0)) {
+        if (!ensureTargetSupportsCxx03(archTarget)) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+        if (printStringProperty(archTarget,
+                    "$CXX_LINKER",
+                    argExpandEnvVar) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+    } else if ((strcmp(argOp, "--ldxx03flags") == 0)) {
+        const char *FLAGS[] = {
+            "$CXX_LINKER_FLAGS",
+            NULL
+        };
+        if (!ensureTargetSupportsCxx03(archTarget)) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+    } else if ((strcmp(argOp, "--ldxx03libs") == 0)) {
+        const char *FLAGS[] = {
+            nddsCPP03Libs,
+            "$SYSLIBS",
+            "$CXX_SYSLIBS",
+            NULL
+        };
+        if (!ensureTargetSupportsCxx03(archTarget)) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+
+    /************ Ultra Modern C++ API *****************/
+
+    } else if ((strcmp(argOp, "--cxx11comp") == 0)) {
+        if (!ensureTargetSupportsCxx11(archTarget)) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+        if (printStringProperty(archTarget,
+                    "$CXX_COMPILER",
+                    argExpandEnvVar) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+    } else if ((strcmp(argOp, "--cxx11flags") == 0)) {
+        const char *FLAGS[] = {
+            "$CXX_COMPILER_FLAGS",
+            "$CPP11_COMPILER_FLAGS",
+            "$DEFINES",
+            "$INCLUDES",
+            nddsCPP03Flags,     // Use same as CPP03 flags
+            NULL
+        };
+        if (!ensureTargetSupportsCxx11(archTarget)) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+    } else if ((strcmp(argOp, "--cxx11link") == 0)) {
+        if (!ensureTargetSupportsCxx11(archTarget)) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+        if (printStringProperty(archTarget,
+                    "$CXX_LINKER",
+                    argExpandEnvVar) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+    } else if ((strcmp(argOp, "--ldxx11flags") == 0)) {
+        const char *FLAGS[] = {
+            "$CXX_LINKER_FLAGS",
+            NULL
+        };
+        if (!ensureTargetSupportsCxx11(archTarget)) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+    } else if ((strcmp(argOp, "--ldxx11libs") == 0)) {
+        const char *FLAGS[] = {
+            nddsCPP03Libs,
+            "$SYSLIBS",
+            "$CXX_SYSLIBS",
+            NULL
+        };
+        if (!ensureTargetSupportsCxx11(archTarget)) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+        if (printCompositeFlagsProperties(archTarget,
+                    FLAGS,
+                    argExpandEnvVar,
+                    argShell) == RTI_FALSE) {
+            retCode = APPLICATION_EXIT_FAILURE;
+            goto done;
+        }
+
+
+    /****************** Miscellaneous *******************/
 
     } else if ((strcmp(argOp, "--os") == 0)) {
         if (printStringProperty(archTarget,
@@ -1962,6 +2271,9 @@ done:
     }
     if (nddsCPPLibs != NULL) {
         free(nddsCPPLibs);
+    }
+    if (nddsCPP03Libs != NULL) {
+        free(nddsCPP03Libs);
     }
     return retCode;
 }

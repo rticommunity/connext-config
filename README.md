@@ -7,34 +7,50 @@ A small command-line utility, similar to pkg-config that help supply build infor
 ## Usage
 
 ```
-RTI Connext DDS Config version 1.0.1
+RTI Connext DDS Config version 1.0.2
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Usage:
     connext-config -h|--help        Show this help
     connext-config -V|--version     Prints version number
     connext-config --list-all       List all platform architectures supported
     connext-config --list-installed List the installed architectures
+    connext-config --dump-all       Dump all platforms and all settings (testing only)
     connext-config [modifiers] <what> [targetArch]
 
 Where [modifiers] are:
-    --static    use static linking against RTI Connext DDS
-    --debug     use debug version of the RTI Connext DDS libraries
-    --sh        use shell-like variable expansion (vs. make-like variables)
-    --noexpand  do not expand environment variables in output
+    --static      use static linking against RTI Connext DDS
+    --debug       use debug version of the RTI Connext DDS libraries
+    --sh          use shell-like variable expansion (vs. make-like variables)
+    --noexpand    do not expand environment variables in output
 
 Required argument <what> is one of:
-    --ccomp     output the C compiler to use
-    --clink     output the C linker to use
-    --cxxcomp   output the C++ compiler to use
-    --cxxlink   output the C++ linker to use
-    --cflags    output all pre-processor and compiler flags for C compiler
-    --cxxflags  output all pre-processor and compiler flags for C++ compiler
-    --ldflags   output the linker flags to use when building C programs
-    --ldxxflags output the linker flags to use when building C++ programs
-    --ldlibs    output the required libraries for C programs
-    --ldxxlibs  output the required libraries for C++ programs
-    --os        output the OS (i.e. UNIX, ANDROID, IOS, ...)
-    --platform  output the Platform (i.e. i86, x64, armv7a, ...)
+  C API:
+    --ccomp       output the C compiler to use
+    --cflags      output all pre-processor and compiler flags
+    --clink       output the C linker to use
+    --ldflags     output the linker flags
+    --ldlibs      output the required libraries
+  Traditional C++ API:
+    --cxxcomp     output the C++ compiler to use
+    --cxxflags    output all pre-processor and compiler flags
+    --cxxlink     output the C++ linker to use
+    --ldxxflags   output the linker flags
+    --ldxxlibs    output the required libraries
+  Modern C++ API (C++-03):
+    --cxx03comp   output the C++ compiler to use
+    --cxx03flags  output all pre-processor and compiler flags
+    --cxx03link   output the C++ linker to use
+    --ldxx03flags output the linker flags
+    --ldxx03libs  output the required libraries
+  Modern C++ API (C++-11):
+    --cxx11comp   output the C++ compiler to use
+    --cxx11flags  output all pre-processor and compiler flags
+    --cxx11link   output the C++ linker to use
+    --ldxx11flags output the linker flags
+    --ldxx11libs  output the required libraries
+  Miscellaneous:
+    --os          output the OS (i.e. UNIX, ANDROID, IOS, ...)
+    --platform    output the Platform (i.e. i86, x64, armv7a, ...)
 
 Optional argument [targetArch] is one of the supported target architectures.
 If not specified, uses environment variable NDDSARCH.
@@ -51,15 +67,20 @@ The tool can be invoked in two ways:
    `connext-config --list-installed`
 3. To obtain the right tool name, flags and libraries for a given architecture. 
 
-In general, when determining the tools required to build a RTI Connext DDS application, you may need to use this tool 5 times. For example, to build a C program:
+In general, when determining the tools required to build a RTI Connext DDS application, you may need to use this tool few times. For example, to build a C program:
 
-* Use the `--ccomp` to determine the correct C compiler to use
+* Use the `--ccomp` to determine the correct compiler to use for the specified API (api=c/cxx/cxx03/cxx11)
 * Use the `--cflags` to determine the right flags for the C compiler 
 * Use the `--clink` to determine the correct linker to use
-* Use the `--ldflags` and `--libs` to get the flags and libraries for the linker. Place the output of the `--ldflags` at the beginning of the argument list, and the output of `--libs` at the end.
+* Use the `--ldflags` and `--ldlibs` to get the flags and libraries for the linker. Place the output of the `--ldflags` at the beginning of the argument list, and the output of `--ldlibs` at the end.
 
-NOTE: there is also 4th way you can invoke the tool that is accessible only when you build the tool from the source code, and you use the `--enable-debug` flag with the `./configure` script. This enables the following use:`connext-config  --dump-all` to dump all the platforms and settings available. This mode is only meant to debugging and troubleshooting.
+NOTE: there is also an additional way you can invoke the tool that is accessible only when you build the tool from the source code, and you use the `--enable-debug` flag with the `./configure` script. This enables the following use:`connext-config --dump-all` to dump all the platforms and settings available. This mode is only meant to debugging and troubleshooting.
 
+If a target does not support a specific language, the tool will print an error. E.g.:
+```
+$ connext-config --cxx11flags i86Linux2.6gcc4.4.5
+Error: target 'i86Linux2.6gcc4.4.5' does not support C++11
+```
 
 
 
@@ -75,6 +96,13 @@ x64Linux2.6gcc4.1.2
 ...
 ```
 
+Show all the installed targets:
+```
+$ connext-config --list-installed
+armv6vfphLinux3.xgcc4.7.2
+x64Linux4gcc7.3.0
+x64Darwin17clang9.0
+```
 
 
 Show the C compiler to use for the target architecture `ppc4xxFPLinux2.6gcc4.5.1`:
@@ -128,7 +156,7 @@ Inside the `examples` directory you can find some projects that uses this tool t
 
 * The `--debug` option affects only the name of the required libraries and NOT the C or C++ compiler flags (for example, it does not include `-g` or disable any optimization, nor define any debug-related macros). 
 
-* Many platforms are not supported: Windows, iOS, Integrity, and in general all the platform where a project is normally not built through Makefile. All the *nix-based architectures are supported.
+* Many platforms are not supported: Windows, iOS, Integrity, and in general all the platform where a project is normally not built through Makefile. All the unix-based architectures are supported.
 
 * To build `connext-config` from the the git source tree, just run:
 
