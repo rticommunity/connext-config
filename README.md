@@ -7,7 +7,7 @@ A small command-line utility, similar to pkg-config that help supply build infor
 ## Usage
 
 ```
-RTI Connext DDS Config version 1.0.2
+RTI Connext DDS Config version 1.0.3
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Usage:
     connext-config -h|--help        Show this help
@@ -22,6 +22,7 @@ Where [modifiers] are:
     --debug       use debug version of the RTI Connext DDS libraries
     --sh          use shell-like variable expansion (vs. make-like variables)
     --noexpand    do not expand environment variables in output
+    --libmsg      include libraries for building request/reply apps
 
 Required argument <what> is one of:
   C API:
@@ -127,9 +128,10 @@ $ ./connext-config --debug --static --ldlibs x64Linux2.6gcc4.5.1
 
 Inside the `examples` directory you can find some projects that uses this tool to automatically configure the build system.
 
-* `examples/autoconf-hello`: this is the same `hello_builtin` example that is part RTI workspace area (typically `~/rti_workspace`) under the `examples/connext_dds/c/hello_builtin` directory. This example uses the popular autotools (autoconf, automake) to invoke `connext-config` to determine the correct build settings. 
+* `examples/autoconf-hello`: this is the same `hello_builtin` example located in the RTI workspace area (typically `~/rti_workspace`) under the `examples/connext_dds/c/hello_builtin` directory. This example uses the popular autotools (autoconf, automake) to invoke `connext-config` to determine the correct build settings. 
   Refer to the [README.md](examples/autoconf-hello/README.md) file for additional information on this example.
 * `example/autoconf-hello-idl-cpp`: this is the same `hello_idl` example located in the RTI workspace area, under the `examples/connext_dds/c++/hello_idl` directory. Similar to the previous example, this project uses autotools (autoconf, automake) to automatically invoke `rtiddsgen` to generate type support code from the included IDL file, and`connext-config` to obtain build settings for a given platform.
+* `examples/cmake-requestreply`: this is the same `hello_world_request_reply` example located in the RTI workspace area under the `examples/connext_dds/c/hello_world_request_reply` directory. This example uses cmake to invoke `connext-config` and generate the appropriate build files. Refer to the [README.md](examples/cmake-requestreply/README.md) file for additional information on this example
 
 
 

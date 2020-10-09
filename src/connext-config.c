@@ -53,7 +53,7 @@
 #define USE_GETCWD
 
 #define APPLICATION_NAME                        "connext-config"
-#define APPLICATION_VERSION                     "1.0.2"
+#define APPLICATION_VERSION                     "1.0.3"
 
 /* The location of the platform file to parse, from the NDDSHOME directory */
 #define NDDS_PLATFORM_FILE      \
@@ -1540,6 +1540,9 @@ void usage() {
     printf("    --debug       use debug version of the RTI Connext DDS libraries\n");
     printf("    --sh          use shell-like variable expansion (vs. make-like variables)\n");
     printf("    --noexpand    do not expand environment variables in output\n");
+    printf("    --libmsg      include libraries for building request/reply apps\n");
+/*    printf("    --librs       include libraries for building Routing Service apps/plugins\n"); */
+/*    printf("    --libsecurity include libraries for building security applications\n"); */
     printf("\n");
     printf("Required argument <what> is one of:\n");
     printf("  C API:\n");
@@ -1586,11 +1589,19 @@ int main(int argc, char **argv) {
     RTIBool argDebug = RTI_FALSE;
     RTIBool argShell = RTI_FALSE;
     RTIBool argExpandEnvVar = RTI_TRUE;
+    RTIBool argMsg = RTI_FALSE;
+    /*
+    RTIBool argRs = RTI_FALSE;
+    RTIBool argSec = RTI_FALSE;
+    */
     char *NDDSHOME = NULL;
     char *platformFile = NULL;
     int retCode = APPLICATION_EXIT_UNKNOWN;
     struct REDAInlineList *archDef = NULL;
     struct Architecture *archTarget;
+    char *nddsExtraLib = NULL;
+    char *nddsExtraLibCPP = NULL;
+    char *nddsExtraLibCPP03 = NULL;
     char *nddsFlags = NULL;
     char *nddsCPP03Flags = NULL;
     char *nddsCLibs = NULL;
@@ -1649,6 +1660,10 @@ int main(int argc, char **argv) {
             }
             if ((strcmp(argv[i], "--noexpand") == 0)) {
                 argExpandEnvVar = RTI_FALSE;
+                continue;
+            }
+            if ((strcmp(argv[i], "--libmsg") == 0)) {
+                argMsg = RTI_TRUE;
                 continue;
             }
             if ((strcmp(argv[i], "-h") == 0) || 
@@ -1820,14 +1835,40 @@ int main(int argc, char **argv) {
     nddsCLibs = calloc(MAX_CMDLINEARG_SIZE+1, 1);
     nddsCPPLibs = calloc(MAX_CMDLINEARG_SIZE+1, 1);
     nddsCPP03Libs = calloc(MAX_CMDLINEARG_SIZE+1, 1);
+    nddsExtraLib = calloc(MAX_CMDLINEARG_SIZE+1, 1);
+    nddsExtraLibCPP = calloc(MAX_CMDLINEARG_SIZE+1, 1);
+    nddsExtraLibCPP03 = calloc(MAX_CMDLINEARG_SIZE+1, 1);
     if (    (nddsFlags == NULL) || 
             (nddsCPP03Flags == NULL) ||
             (nddsCLibs == NULL) || 
             (nddsCPPLibs == NULL) || 
-            (nddsCPP03Libs == NULL) ) {
+            (nddsCPP03Libs == NULL) ||
+            (nddsExtraLib == NULL) ||
+            (nddsExtraLibCPP == NULL) ||
+            (nddsExtraLibCPP03 == NULL) ) {
         fprintf(stderr, "Out of memory allocating command-line arguments");
         retCode = APPLICATION_EXIT_FAILURE;
         goto done;
+    }
+
+
+    if (argMsg == RTI_TRUE) {
+        snprintf(nddsExtraLib,
+                MAX_CMDLINEARG_SIZE,
+                "-lrticonnextmsgc%s ",
+                libSuffix);
+        snprintf(nddsExtraLibCPP,
+                MAX_CMDLINEARG_SIZE,
+                "-lrticonnextmsgcpp%s ",
+                libSuffix);
+        snprintf(nddsExtraLibCPP03,
+                MAX_CMDLINEARG_SIZE,
+                "-lrticonnextmsgcpp2%s ",
+                libSuffix);
+    } else {
+        nddsExtraLib[0] = '\0';
+        nddsExtraLibCPP[0] = '\0';
+        nddsExtraLibCPP03[0] = '\0';
     }
 
     if (argExpandEnvVar == RTI_TRUE) {
@@ -1845,24 +1886,27 @@ int main(int argc, char **argv) {
                 NDDSHOME);
         snprintf(nddsCLibs,
                 MAX_CMDLINEARG_SIZE,
-                "-L%s/lib/%s -lnddsc%s -lnddscore%s",
+                "-L%s/lib/%s %s-lnddsc%s -lnddscore%s",
                 NDDSHOME,
                 argTarget,
+                nddsExtraLib,
                 libSuffix,
                 libSuffix);
         snprintf(nddsCPPLibs,
                 MAX_CMDLINEARG_SIZE,
-                "-L%s/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s",
+                "-L%s/lib/%s %s-lnddscpp%s -lnddsc%s -lnddscore%s",
                 NDDSHOME,
                 argTarget,
+                nddsExtraLibCPP,
                 libSuffix,
                 libSuffix,
                 libSuffix);
         snprintf(nddsCPP03Libs,
                 MAX_CMDLINEARG_SIZE,
-                "-L%s/lib/%s -lnddscpp2%s -lnddsc%s -lnddscore%s",
+                "-L%s/lib/%s %s-lnddscpp2%s -lnddsc%s -lnddscore%s",
                 NDDSHOME,
                 argTarget,
+                nddsExtraLibCPP03,
                 libSuffix,
                 libSuffix,
                 libSuffix);
@@ -1878,21 +1922,24 @@ int main(int argc, char **argv) {
                     "-I${NDDSHOME}/include -I${NDDSHOME}/include/ndds -I${NDDSHOME}/include/ndds/hpp");
             snprintf(nddsCLibs,
                     MAX_CMDLINEARG_SIZE,
-                    "-L${NDDSHOME}/lib/%s -lnddsc%s -lnddscore%s",
+                    "-L${NDDSHOME}/lib/%s %s-lnddsc%s -lnddscore%s",
                     argTarget,
+                    nddsExtraLib,
                     libSuffix,
                     libSuffix);
             snprintf(nddsCPPLibs,
                     MAX_CMDLINEARG_SIZE,
-                    "-L${NDDSHOME}/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s",
+                    "-L${NDDSHOME}/lib/%s %s-lnddscpp%s -lnddsc%s -lnddscore%s",
                     argTarget,
+                    nddsExtraLibCPP,
                     libSuffix,
                     libSuffix,
                     libSuffix);
             snprintf(nddsCPP03Libs,
                     MAX_CMDLINEARG_SIZE,
-                    "-L${NDDSHOME}/lib/%s -lnddscpp2%s -lnddsc%s -lnddscore%s",
+                    "-L${NDDSHOME}/lib/%s %s-lnddscpp2%s -lnddsc%s -lnddscore%s",
                     argTarget,
+                    nddsExtraLibCPP03,
                     libSuffix,
                     libSuffix,
                     libSuffix);
@@ -1906,21 +1953,24 @@ int main(int argc, char **argv) {
                     "-I$(NDDSHOME)/include -I$(NDDSHOME)/include/ndds, -I$(NDDSHOME)/include/ndds/hpp");
             snprintf(nddsCLibs,
                     MAX_CMDLINEARG_SIZE,
-                    "-L$(NDDSHOME)/lib/%s -lnddsc%s -lnddscore%s",
+                    "-L$(NDDSHOME)/lib/%s %s-lnddsc%s -lnddscore%s",
                     argTarget,
+                    nddsExtraLib,
                     libSuffix,
                     libSuffix);
             snprintf(nddsCPPLibs,
                     MAX_CMDLINEARG_SIZE,
-                    "-L$(NDDSHOME)/lib/%s -lnddscpp%s -lnddsc%s -lnddscore%s",
+                    "-L$(NDDSHOME)/lib/%s %s-lnddscpp%s -lnddsc%s -lnddscore%s",
                     argTarget,
+                    nddsExtraLibCPP,
                     libSuffix,
                     libSuffix,
                     libSuffix);
             snprintf(nddsCPP03Libs,
                     MAX_CMDLINEARG_SIZE,
-                    "-L$(NDDSHOME)/lib/%s -lnddscpp2%s -lnddsc%s -lnddscore%s",
+                    "-L$(NDDSHOME)/lib/%s %s-lnddscpp2%s -lnddsc%s -lnddscore%s",
                     argTarget,
+                    nddsExtraLibCPP03,
                     libSuffix,
                     libSuffix,
                     libSuffix);
