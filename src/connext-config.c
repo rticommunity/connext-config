@@ -93,7 +93,7 @@ typedef enum {
 #define MAX_STRING_SIZE     200
 
 /* The maximum number of key-value pairs stored for each architecture */
-#define MAX_ARRAY_SIZE      20
+#define MAX_ARRAY_SIZE      40
 
 /* The maximum length of a command line or command line argument */
 #define MAX_CMDLINEARG_SIZE 1024
@@ -1136,7 +1136,13 @@ RTIBool processArchDefinitionLine(const char *line,
  *                  parsed key and value.
  * \return          RTI_TRUE if success, RTI_FALSE if an error occurred
  */
-RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
+typedef enum {
+    ProcessLineResult_Done,
+    ProcessLineResult_Error,
+    ProcessLineResult_Continue
+} ProcessLineResult;
+
+ProcessLineResult processKeyValuePairLine(char *line, struct ArchParameter *param) {
     char *key;
     char *val;
     char *tmp;
@@ -1147,7 +1153,7 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
         fprintf(stderr, 
                 "Cannot find key-value pair delimiter ':' in line: '%s'\n", 
                 line);
-        return RTI_FALSE;
+        return ProcessLineResult_Error;
     }
     val = tmp+1;    /* Skip the ':' */
 
@@ -1166,7 +1172,7 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
         fprintf(stderr, "Key too long: '%s' (>%ld)\n",
                 key, 
                 sizeof(param->key));
-        return RTI_FALSE;
+        return ProcessLineResult_Error;
     }
 
     strcpy(param->key, key);
@@ -1179,13 +1185,13 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
         /* Booleans are "true" ... */
         param->valueType = APVT_Boolean;
         param->value.as_bool = 1;
-        return RTI_TRUE;
+        return ProcessLineResult_Done;
     }
     if (strncmp(val, "false", 5) == 0) {
         /* ...or "false" */
         param->valueType = APVT_Boolean;
         param->value.as_bool = 0;
-        return RTI_TRUE;
+        return ProcessLineResult_Done;
     }
     if ((*val == '"') || (*val == '\'')) {
         /* Strings are in single or double quotes */
@@ -1200,15 +1206,20 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
                     "Error: %s while parsing key-value pair line: '%s'\n",
                     errMsg, 
                     line);
-            return RTI_FALSE;
+            return ProcessLineResult_Error;
         }
-        return RTI_TRUE;
+        return ProcessLineResult_Done;
     }
 
     if (*val == '[') {
         /* Value is an array of strings enclosed in single or double quotes */
         size_t idx = 0;
         const char *errMsg;
+        /* Does the line contains the full array? */
+        if (strchr(val, ']') == NULL) {
+            /* No: array continues to the next line */
+            return ProcessLineResult_Continue;
+        }
         param->valueType = APVT_ArrayOfStrings;
         while ((strchr(val, '"') != NULL) || (strchr(val, '\'') != NULL)) {
             val = parseStringInQuotes(val, 
@@ -1220,13 +1231,19 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
                         "Error: %s while parsing key-value pair line: '%s'\n",
                         errMsg, 
                         line);
-                return RTI_FALSE;
+                return ProcessLineResult_Error;
             }
             ++val;
             ++idx;
+            if (idx == MAX_ARRAY_SIZE) {
+                fprintf(stderr,
+                        "Error: reached max number of elements in array: %ld, increase MAX_ARRAY_SIZE and rebuild\n",
+                        idx);
+                return ProcessLineResult_Error;
+            }
         }
 
-        return RTI_TRUE;
+        return ProcessLineResult_Done;
     }
     if (*val == '$') {
         /* Values starting with a '$' are env variable */
@@ -1236,7 +1253,7 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
             fprintf(stderr,
                     "Unable to find end of env variable delimiter in line '%s'\n",
                     line);
-            return RTI_FALSE;
+            return ProcessLineResult_Error;
         }
         *tmp = '\0';
 
@@ -1250,55 +1267,46 @@ RTIBool processKeyValuePairLine(char *line, struct ArchParameter *param) {
             fprintf(stderr,
                     "Unable to find '.' delimiter of env variable in line '%s'\n",
                     line);
-            return RTI_FALSE;
+            return ProcessLineResult_Error;
         }
 
         strcpy(param->value.as_string, tmp+1);
 
-        return RTI_TRUE;
+        return ProcessLineResult_Done;
     }
 
-    return RTI_TRUE;
+    return ProcessLineResult_Done;
 }
 
 /* }}} */
-/* {{{ readPlatformFile
+/* {{{ appendNextLine
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- * Top-level function that parses the platform file and populates the
- * archDef list
- *
- * This parser read and parse one line at the time. It uses a simple state
- * machine to track the state of the parser when processing a line.
- *
- * \param filePath      pointer to the full path of the platform file
- * \param archDef       pointer to the list where to store the parsed arches
- * \return              RTI_TRUE if success, RTI_FALSE if an error occurred
  */
-RTIBool readPlatformFile(const char *filePath, 
-        struct REDAInlineList *archDef) {
-    RTIBool ok = RTI_FALSE;
-    FILE *fp;
+char *appendNextLine(FILE *fp, char *currLine, unsigned int *pLineCount) {
     char *line = NULL;
-    size_t lineLen = 0;
-    ssize_t nRead;
-    ReadStateMachine rsm = RSM_TOPLEVEL;
-    struct Architecture *currentArch = NULL;
-    struct ArchParameter *currentParam = NULL;
-    char *trimLine;
-    char target[MAX_STRING_SIZE];
-    char compiler[MAX_STRING_SIZE];
-    RTIBool longComment = RTI_FALSE;
+    size_t lineLen;
+    size_t currLineLen = 0;
     char *tmp;
-    unsigned int lineCount = 0;
+    RTIBool longComment = RTI_FALSE;
+    char *trimLine;
+    ssize_t nRead;
 
-    fp = fopen(filePath, "r");
-    if (fp == NULL) {
-        fprintf(stderr, "Platform file not found: %s\n", filePath);
-        return RTI_FALSE;
-    }
+    if (currLine) currLineLen = strlen(currLine);
 
-    while (getline(&line, &lineLen, fp) != -1) {
-        ++lineCount;
+    for (;;) {
+        if (line) {
+            free(line);
+            line = NULL;
+        }
+        lineLen = 0;
+
+        /* Always allocate a new buffer */
+        printf(">> line=%u\n", *pLineCount);
+        if (getline(&line, &lineLen, fp) == -1) {
+            /* EOF */
+            break;
+        }
+        ++*pLineCount;
 
         /* Identify multi-line comments */
         if ((tmp = strstr(line, "#*")) != NULL) {
@@ -1310,6 +1318,7 @@ RTIBool readPlatformFile(const char *filePath,
         if ((longComment == RTI_TRUE) && ((tmp = strstr(trimLine, "*#")) != NULL)) {
             longComment = RTI_FALSE;
             trimLine = tmp+2;
+            /* NOTE: Multi line comments are not handled correctly */
         }
 
         /*
@@ -1352,6 +1361,80 @@ RTIBool readPlatformFile(const char *filePath,
             continue;
         }
 
+        /* Append trimLine to currLine, reallocating its space */
+        currLineLen += strlen(trimLine)+1;
+        if (currLine) {
+            currLine = realloc(currLine, currLineLen);
+        } else {
+            /* Note: realloc(NULL) behaves like malloc() not like calloc(), we
+             *       still need to set the string to empty after allocation
+             */
+            currLine = calloc(1, currLineLen);
+        }
+        if (!currLine) {
+            fprintf(stderr, "realloc failed, size=%lu\n", currLineLen);
+            return NULL;
+        }
+        strncat(currLine, trimLine, currLineLen - 1);
+
+        /* Free line */
+        free(line);
+        return currLine;
+    }
+    /* Reached the end of file */
+    return currLine;
+}
+
+/* }}} */
+/* {{{ readPlatformFile
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Top-level function that parses the platform file and populates the
+ * archDef list
+ *
+ * This parser read and parse one line at the time. It uses a simple state
+ * machine to track the state of the parser when processing a line.
+ *
+ * \param filePath      pointer to the full path of the platform file
+ * \param archDef       pointer to the list where to store the parsed arches
+ * \return              RTI_TRUE if success, RTI_FALSE if an error occurred
+ */
+RTIBool readPlatformFile(const char *filePath, 
+        struct REDAInlineList *archDef) {
+    RTIBool ok = RTI_FALSE;
+    FILE *fp;
+    char *line = NULL;
+    ReadStateMachine rsm = RSM_TOPLEVEL;
+    struct Architecture *currentArch = NULL;
+    struct ArchParameter *currentParam = NULL;
+    char target[MAX_STRING_SIZE];
+    char compiler[MAX_STRING_SIZE];
+    RTIBool concatLines = RTI_FALSE;        /* Value spans multiple lines */
+    unsigned int lineCount = 0;
+    char *origLine;
+
+    fp = fopen(filePath, "r");
+    if (fp == NULL) {
+        fprintf(stderr, "Platform file not found: %s\n", filePath);
+        return RTI_FALSE;
+    }
+
+    for (;;) {
+        if (!concatLines) {
+            free(line);
+            line = NULL;
+            concatLines = RTI_FALSE;
+        }
+        line = appendNextLine(fp, line, &lineCount);
+        if (!line) {
+            /* Out of memory */
+            return RTI_FALSE;
+        }
+
+        /* Skip empty lines */
+        if (line[0] == '\0') {
+            continue;
+        }
+
         /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
          * FSM State: TOP LEVEL
          * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
@@ -1363,12 +1446,12 @@ RTIBool readPlatformFile(const char *filePath,
              * Example:
              *      #macro (arch $name $compiler $params)
              */
-            if (strncmp(trimLine, "#macro", 6) == 0) {
+            if (strncmp(line, "#macro", 6) == 0) {
                 rsm = RSM_MACRO;
                 continue;
             }
 
-            if (strncmp(trimLine, "#set", 4) == 0) {
+            if (strncmp(line, "#set", 4) == 0) {
                 // Skip the #set command
                 // NOTE: currently we just skip the line since
                 //       this command is not used.
@@ -1379,14 +1462,14 @@ RTIBool readPlatformFile(const char *filePath,
              * Example:
              *      #arch("sparc64Sol2.10","gcc3.4.2", {
              */
-            if (strncmp(trimLine, "#arch(", 6) == 0) {
+            if (strncmp(line, "#arch(", 6) == 0) {
                 currentArch = Architecture_new();
                 if (currentArch == NULL) {
                     fprintf(stderr,
                             "Out of memory allocating currentArch\n");
                     goto done;
                 }
-                if (processArchDefinitionLine(trimLine, 
+                if (processArchDefinitionLine(line, 
                             &target[0], 
                             &compiler[0]) == RTI_FALSE) {
                     goto done;
@@ -1399,7 +1482,7 @@ RTIBool readPlatformFile(const char *filePath,
                     fprintf(stderr, 
                             "Composite target string too long for platform: "
                             "%s\n", 
-                            trimLine);
+                            line);
                     goto done;
                 }
                 rsm = RSM_ARCH;
@@ -1409,7 +1492,7 @@ RTIBool readPlatformFile(const char *filePath,
             /* Unexpected */
             fprintf(stderr, 
                     "ERROR: unknown how to parse line: '%s'\n", 
-                    trimLine);
+                    line);
             goto done;
         }
 
@@ -1418,7 +1501,7 @@ RTIBool readPlatformFile(const char *filePath,
          * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
         if (rsm == RSM_MACRO) {
             /* In macro state, ignore everything until the #end symbol */
-            if (strncmp(trimLine, "#end", 4) == 0) {
+            if (strncmp(line, "#end", 4) == 0) {
                 rsm = RSM_TOPLEVEL;
             }
             continue;
@@ -1428,8 +1511,9 @@ RTIBool readPlatformFile(const char *filePath,
          * FSM State: ARCH (inside an Architecture definition)
          * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
         if (rsm == RSM_ARCH) {
+            ProcessLineResult plres;
             /* Exit ARCH after we detect the '})\n' pattern */
-            if (strncmp(trimLine, "})\n", 3) == 0) {
+            if (strncmp(line, "})\n", 3) == 0) {
 
                 /* Filter out the architectures that need to be skipped:
                  *  - $HIDDEN=true
@@ -1468,19 +1552,35 @@ RTIBool readPlatformFile(const char *filePath,
             }
 
             /* process the arch line */
-            currentParam = ArchParameter_new();
+            if (currentParam == NULL) {
+                /* Note: if not null, it was previously created for a multi-line array */
+                currentParam = ArchParameter_new();
+            }
             if (currentParam == NULL) {
                 fprintf(stderr, "Out of memory allocating currentParam\n");
                 goto done;
             }
-            if (processKeyValuePairLine(trimLine, currentParam) == RTI_FALSE) {
+            origLine = strdup(line);
+            plres = processKeyValuePairLine(line, currentParam);
+            if (plres == ProcessLineResult_Error) {
+                free(origLine);
                 goto done;
+            }
+            if (plres == ProcessLineResult_Continue) {
+                /* Need to concatenate with the next line and try again */
+                //ArchParameter_delete(currentParam);
+                //currentParam = NULL;
+                concatLines = RTI_TRUE;
+                memcpy(line, origLine, strlen(origLine)+1);
+                free(origLine);
+                continue;
             }
 
             /* Got a valid line: */
             REDAInlineList_addNodeToBackEA(&currentArch->paramList, 
                     &currentParam->parent);
             currentParam = NULL;
+            concatLines = RTI_FALSE;
             continue;
         }
     
