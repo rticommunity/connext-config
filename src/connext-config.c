@@ -1301,7 +1301,6 @@ char *appendNextLine(FILE *fp, char *currLine, unsigned int *pLineCount) {
         lineLen = 0;
 
         /* Always allocate a new buffer */
-        printf(">> line=%u\n", *pLineCount);
         if (getline(&line, &lineLen, fp) == -1) {
             /* EOF */
             break;
