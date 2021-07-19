@@ -1,6 +1,6 @@
 # Hello IDL C++
 
-This is the RTI Connext DDS example copied from the example directory in the RTI workspace: `rti_workspace/<VersionNumber>/examples/connext_dds/c++/hello_idl
+This is the RTI Connext DDS example copied from the example directory in the RTI workspace: `rti_workspace/<VersionNumber>/examples/connext_dds/c++/hello_idl`
 
 This version uses the same source files (Hello.c, Hello.h, ...) but uses the autotools (autoconf, automake) to generate a Makefile for the target architecture selectable during the `./configure` phase.
 
