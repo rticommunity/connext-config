@@ -7,7 +7,7 @@ A small command-line utility, similar to pkg-config that help supply build infor
 ## Usage
 
 ```
-RTI Connext DDS Config version 1.0.3
+RTI Connext DDS Config version 1.0.4
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Usage:
     connext-config -h|--help        Show this help

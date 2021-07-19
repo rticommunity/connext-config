@@ -5,7 +5,7 @@ dnl * Permission to modify and use for internal purposes granted.               
 dnl * This software is provided "as is", without warranty, express or implied.  *
 dnl *****************************************************************************
 
-AC_INIT(connext-config, 1.0.3, fabrizio@rti.com)
+AC_INIT(connext-config, 1.0.4, fabrizio@rti.com)
 AC_CONFIG_SRCDIR([src/connext-config.c])
 
 AM_INIT_AUTOMAKE([subdir-objects tar-ustar foreign])

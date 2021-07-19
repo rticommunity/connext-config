@@ -53,7 +53,7 @@
 #define USE_GETCWD
 
 #define APPLICATION_NAME                        "connext-config"
-#define APPLICATION_VERSION                     "1.0.3"
+#define APPLICATION_VERSION                     "1.0.4"
 
 /* The location of the platform file to parse, from the NDDSHOME directory */
 #define NDDS_PLATFORM_FILE      \
