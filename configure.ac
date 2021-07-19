@@ -69,7 +69,7 @@ AC_CHECK_FILE("${NDDSHOME}/include/ndds/ndds_c.h",
         AC_MSG_ERROR(RTI Connext DDS not found or NDDSHOME not defined)
 ])
 
-CFLAGS="$CFLAGS -I${NDDSHOME}/include -I${NDDSHOME}/include/ndds"
+CFLAGS="$CFLAGS -DRTI_UNIX -I${NDDSHOME}/include -I${NDDSHOME}/include/ndds"
 
 AC_OUTPUT(Makefile src/Makefile)
 
