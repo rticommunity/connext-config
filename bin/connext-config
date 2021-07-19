@@ -1,23 +1,23 @@
 #!/bin/sh
 ##############################################################################
-# Copyright 2020 Real-Time Innovations, Inc.                                 #
+# Copyright 2021 Real-Time Innovations, Inc.                                 #
 # Author: fabriziobertocci@gmail.com                                         #
 # Subject to Eclipse Public License v1.0; see LICENSE.md for details.        #
 ##############################################################################
 
 filename=$0
 script_dir=`cd "\`dirname "$filename"\`"; pwd`
-executable_name="connext-config"
-script_version=6.0.0
+bin_dir="$script_dir/../resource/app/bin"
 
-rticommon_script_dir=$script_dir/../resource/scripts
-rticommon_script_name=rticommon.sh
-
-if [ ! -f "$rticommon_script_dir/$rticommon_script_name" ]
-then
-    rticommon_script_dir=$script_dir/../../ndds.4.1/resource/scripts
+# Ignore the platform set by common script
+plat=`uname`
+if [ "$plat" = "Linux" ]; then
+    arch=x64Linux2.6gcc4.4.5
+elif [ "$plat" == "Darwin" ]; then
+    arch=x64Darwin15clang7.0
+else
+    echo "Unknown or unsupported host architecture: $plat"
+    exit 1
 fi
 
-. "$rticommon_script_dir/$rticommon_script_name"
-
-exec "$bin_dir/$platform_name/$executable_name" "$@"
+exec "$bin_dir/$arch/connext-config" "$@"
